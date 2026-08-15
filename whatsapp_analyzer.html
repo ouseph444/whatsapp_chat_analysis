@@ -1,0 +1,2089 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chat Autopsy</title>
+<style>
+/* ============================================================ tokens ==== */
+:root{
+  color-scheme:light;
+  --paper:#fcfcfb; --ground:#e9e8e2; --raise:#f4f3ef;
+  --ink:#0b0b0b; --ink-2:#52514e; --ink-3:#898781;
+  --rule:#e1e0d9; --rule-2:#c9c8c0;
+  --accent:#104281; --accent-2:#2a78d6; --accent-soft:#cde2fb;
+  --seq:#2a78d6; --on-seq:#ffffff;
+  --good:#0ca30c; --warn:#fab219; --crit:#d03b3b;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100;
+  --s5:#e87ba4; --s6:#008300; --s7:#4a3aa7; --s8:#e34948;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --paper:#1a1a19; --ground:#0d0d0d; --raise:#232321;
+    --ink:#ffffff; --ink-2:#c3c2b7; --ink-3:#898781;
+    --rule:#2c2c2a; --rule-2:#383835;
+    --accent:#86b6ef; --accent-2:#3987e5; --accent-soft:#1c5cab;
+    --seq:#5598e7; --on-seq:#0d0d0d;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
+    --s5:#d55181; --s6:#008300; --s7:#9085e9; --s8:#e66767;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --paper:#1a1a19; --ground:#0d0d0d; --raise:#232321;
+  --ink:#ffffff; --ink-2:#c3c2b7; --ink-3:#898781;
+  --rule:#2c2c2a; --rule-2:#383835;
+  --accent:#86b6ef; --accent-2:#3987e5; --accent-soft:#1c5cab;
+  --seq:#5598e7; --on-seq:#0d0d0d;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
+  --s5:#d55181; --s6:#008300; --s7:#9085e9; --s8:#e66767;
+}
+
+/* ============================================================ base ===== */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);
+  font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;text-wrap:balance}
+a{color:var(--accent);text-underline-offset:3px}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:3px}
+.sheet{max-width:1240px;margin:0 auto;background:var(--paper);
+  border-left:1px solid var(--rule);border-right:1px solid var(--rule);min-height:100vh}
+.pad{padding:0 clamp(18px,4vw,56px)}
+.mono{font-family:var(--mono)}
+.eyebrow{font-family:var(--mono);font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-3);margin:0}
+.eyebrow b{color:var(--accent);font-weight:600}
+
+/* ============================================================ intro ==== */
+#intro{padding:clamp(34px,6vw,74px) 0 clamp(40px,6vw,80px)}
+#intro h1{font-family:var(--serif);font-weight:400;font-size:clamp(2.1rem,6vw,4rem);
+  line-height:1.03;letter-spacing:-.015em;margin:16px 0 0;overflow-wrap:break-word}
+#intro h1 em{font-style:italic;color:var(--accent)}
+.lede{max-width:60ch;color:var(--ink-2);font-size:clamp(1rem,1.6vw,1.15rem);margin:18px 0 0}
+.drop{margin-top:34px;border:1.5px dashed var(--rule-2);border-radius:6px;background:var(--raise);
+  padding:clamp(28px,5vw,54px) 24px;text-align:center;transition:border-color .15s,background .15s}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop h2{font-family:var(--serif);font-weight:400;font-size:1.5rem;margin-bottom:6px}
+.drop p{color:var(--ink-2);margin:8px auto 0;max-width:52ch;font-size:.94rem}
+.btn{display:inline-block;margin-top:20px;padding:11px 22px;border:1px solid var(--accent);
+  background:var(--accent);color:var(--paper);border-radius:4px;cursor:pointer;
+  font-size:.92rem;font-weight:600}
+.btn.ghost{background:transparent;color:var(--accent)}
+.btn:hover{filter:brightness(1.08)}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.howto{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:1px;
+  background:var(--rule);border:1px solid var(--rule);margin-top:34px}
+.howto section{background:var(--paper);padding:20px 22px}
+.howto h3{font-size:.82rem;font-family:var(--mono);letter-spacing:.1em;text-transform:uppercase;
+  color:var(--accent);margin-bottom:8px;font-weight:600}
+.howto p,.howto li{font-size:.88rem;color:var(--ink-2);margin:0}
+.howto ol{margin:0;padding-left:18px}
+.howto li{margin-bottom:4px}
+.err{margin-top:18px;padding:12px 16px;border-left:3px solid var(--crit);background:var(--raise);
+  color:var(--ink);font-size:.9rem;display:none}
+.err.show{display:block}
+#busy{display:none;margin-top:26px;font-family:var(--mono);font-size:.8rem;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-3)}
+#busy.show{display:block}
+.dot-pulse{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);
+  margin-right:8px;animation:pulse 1s infinite ease-in-out}
+@keyframes pulse{0%,100%{opacity:.25}50%{opacity:1}}
+
+/* ============================================================ report === */
+#report{display:none}
+#report.show{display:block}
+.masthead{padding-top:clamp(30px,5vw,60px);padding-bottom:26px}
+.masthead h1{font-family:var(--serif);font-weight:400;font-size:clamp(1.9rem,4.6vw,3.2rem);
+  line-height:1.06;letter-spacing:-.015em;margin-top:14px}
+.masthead .sub{color:var(--ink-2);margin-top:14px;max-width:62ch}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:22px;
+  padding-top:16px;border-top:1px solid var(--rule)}
+.tool{font-family:var(--mono);font-size:.74rem;letter-spacing:.06em;padding:7px 12px;
+  border:1px solid var(--rule-2);background:transparent;border-radius:3px;cursor:pointer;color:var(--ink-2)}
+.tool:hover{border-color:var(--accent);color:var(--accent)}
+.tool select{font:inherit;background:transparent;border:0;color:var(--ink);cursor:pointer}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr));
+  border-top:1px solid var(--rule-2);border-bottom:1px solid var(--rule-2)}
+.stat{padding:20px 22px;border-right:1px solid var(--rule)}
+.stat:last-child{border-right:0}
+.stat-n{font-family:var(--mono);font-size:clamp(1.35rem,2.4vw,1.9rem);letter-spacing:-.02em;
+  font-variant-numeric:tabular-nums;line-height:1.15}
+.stat-l{font-size:.76rem;color:var(--ink-3);margin-top:5px;line-height:1.35}
+
+nav{position:sticky;top:0;z-index:30;background:color-mix(in srgb,var(--paper) 94%,transparent);
+  backdrop-filter:blur(8px);border-top:1px solid var(--rule-2);border-bottom:1px solid var(--rule-2)}
+.nav-inner{display:flex;gap:2px;overflow-x:auto;scrollbar-width:thin}
+nav a{flex:none;display:flex;gap:6px;align-items:baseline;padding:11px 13px;font-size:.78rem;
+  color:var(--ink-2);text-decoration:none;white-space:nowrap;border-bottom:2px solid transparent}
+nav a i{font-family:var(--mono);font-style:normal;font-size:.64rem;color:var(--ink-3)}
+nav a:hover{color:var(--ink);background:var(--raise)}
+nav a.on{color:var(--accent);border-bottom-color:var(--accent)}
+nav a.on i{color:var(--accent)}
+
+section.sec{padding:clamp(34px,5vw,58px) clamp(18px,4vw,56px);border-bottom:1px solid var(--rule);
+  scroll-margin-top:52px}
+.sec-head{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:baseline;margin-bottom:8px}
+.sec-num{font-family:var(--mono);font-size:.78rem;color:var(--accent);letter-spacing:.06em}
+.sec-head h2{font-family:var(--serif);font-weight:400;font-size:clamp(1.4rem,2.7vw,2rem);
+  line-height:1.15;letter-spacing:-.01em}
+.sec-intro{max-width:70ch;color:var(--ink-2);margin:0 0 24px;font-size:.95rem}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(400px,100%),1fr));gap:26px}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(290px,100%),1fr));gap:22px}
+
+/* figure cards */
+.card{margin:0 0 26px}
+.card h3{font-size:1rem;font-weight:600;margin-bottom:3px}
+.card .csub{font-size:.84rem;color:var(--ink-3);margin:0 0 12px;max-width:70ch}
+.card svg{display:block;width:100%;height:auto;overflow:visible}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:10px}
+.legend span{display:flex;align-items:center;gap:6px;font-size:.78rem;color:var(--ink-2)}
+.legend i{width:11px;height:11px;border-radius:2px;display:inline-block}
+details.data{margin-top:10px;border-top:1px solid var(--rule)}
+details.data summary{cursor:pointer;list-style:none;font-family:var(--mono);font-size:.66rem;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);padding:7px 0}
+details.data summary::-webkit-details-marker{display:none}
+details.data summary::before{content:"+ ";color:var(--accent)}
+details.data[open] summary::before{content:"– "}
+details.data summary:hover{color:var(--ink)}
+
+/* svg chrome */
+.ax{fill:var(--ink-3);font-size:12px;font-family:var(--sans)}
+.axm{fill:var(--ink-3);font-size:12px;font-family:var(--mono)}
+.lbl{fill:var(--ink-2);font-size:12.5px;font-family:var(--mono)}
+.lbn{fill:var(--ink);font-size:13px;font-family:var(--sans)}
+.ttl{fill:var(--ink);font-size:14px;font-weight:600;font-family:var(--sans)}
+.grid{stroke:var(--rule);stroke-width:1}
+.base{stroke:var(--rule-2);stroke-width:1}
+.cellhi{fill:var(--on-seq);font-size:11px;font-family:var(--mono)}
+.celllo{fill:var(--ink-2);font-size:11px;font-family:var(--mono)}
+.mk{transition:opacity .12s}
+.mk:hover{opacity:.82;cursor:default}
+
+/* tables */
+.tw{overflow-x:auto;border:1px solid var(--rule);border-radius:3px;margin-top:8px}
+table{border-collapse:collapse;width:100%;font-size:.82rem;font-variant-numeric:tabular-nums}
+th,td{padding:7px 12px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--rule)}
+thead th{background:var(--raise);color:var(--ink);font-weight:600;font-size:.74rem;
+  border-bottom:1px solid var(--rule-2);position:sticky;top:0}
+tbody th,td.l,th.l{text-align:left}
+tbody th{font-weight:600;color:var(--ink)}
+tbody tr:last-child td,tbody tr:last-child th{border-bottom:0}
+tbody tr:hover td,tbody tr:hover th{background:var(--raise)}
+td.wrap{white-space:normal;min-width:260px;text-align:left;color:var(--ink-2)}
+.dotc{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:baseline}
+.emo{font-size:1.1rem;letter-spacing:.1em}
+
+/* member cards */
+.mcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),1fr));
+  gap:1px;background:var(--rule);border:1px solid var(--rule)}
+.mcard{background:var(--paper);padding:20px}
+.mcard header{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.mcard h3{font-size:.98rem;flex:1}
+.mcard .rank{font-family:var(--mono);font-size:.7rem;color:var(--ink-3)}
+.mcard dl{margin:0}
+.mcard dl>div{display:flex;justify-content:space-between;gap:10px;padding:4px 0;
+  border-bottom:1px dotted var(--rule)}
+.mcard dt{font-size:.78rem;color:var(--ink-3)}
+.mcard dd{margin:0;font-family:var(--mono);font-size:.8rem;font-variant-numeric:tabular-nums}
+.mfoot{margin:10px 0 0;font-size:.78rem;color:var(--ink-2)}
+.mfoot .lab{display:block;font-family:var(--mono);font-size:.63rem;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ink-3);margin-bottom:2px}
+
+/* callouts */
+.facts{display:grid;grid-template-columns:minmax(140px,220px) 1fr;border-top:1px solid var(--rule-2)}
+.fk{font-family:var(--mono);font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--ink-3);padding:9px 0;border-bottom:1px solid var(--rule)}
+.fv{font-size:.92rem;padding:9px 0;border-bottom:1px solid var(--rule)}
+.note{font-size:.85rem;color:var(--ink-3);margin-top:10px;max-width:70ch}
+.tip{position:fixed;z-index:99;pointer-events:none;opacity:0;transition:opacity .1s;
+  background:var(--ink);color:var(--paper);font-size:.76rem;line-height:1.45;padding:7px 10px;
+  border-radius:4px;max-width:260px;font-family:var(--sans);box-shadow:0 4px 14px rgba(0,0,0,.18)}
+footer{padding:clamp(34px,5vw,58px) clamp(18px,4vw,56px) 70px}
+footer h3{font-family:var(--serif);font-weight:400;font-size:1.35rem;margin-bottom:12px}
+footer .prose{max-width:72ch;color:var(--ink-2);font-size:.92rem}
+footer li{margin-bottom:7px}
+.colophon{margin-top:30px;padding-top:14px;border-top:1px solid var(--rule);font-family:var(--mono);
+  font-size:.68rem;letter-spacing:.06em;color:var(--ink-3);display:flex;flex-wrap:wrap;
+  gap:8px 18px;justify-content:space-between}
+@media (max-width:640px){
+  .sec-head{grid-template-columns:1fr;gap:2px}
+  .facts{grid-template-columns:1fr}
+  .fk{border-bottom:0;padding-bottom:0}
+  .fv{padding-top:2px}
+  .stat{border-right:0;border-bottom:1px solid var(--rule)}
+}
+@media print{
+  nav,.toolbar,.drop,.howto{display:none}
+  .sheet{border:0;max-width:none}
+  .card,.tw,.mcard{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<div class="sheet">
+
+<!-- ============================================================ INTRO -->
+<div id="intro" class="pad">
+  <p class="eyebrow">Client-side chat analysis &nbsp;·&nbsp; <b>nothing leaves your device</b></p>
+  <h1>Drop a WhatsApp export.<br>Get the <em>whole story</em>.</h1>
+  <p class="lede">Upload the <code>.txt</code> (or the <code>.zip</code>) that WhatsApp gives you and this page
+    counts every message, ranks every participant, and builds 40+ charts — who talks most, when the chat
+    is awake, who replies fastest, who gets the last word, which words and emoji belong to whom.</p>
+
+  <div class="drop" id="drop">
+    <h2>Drop your chat export here</h2>
+    <p>or choose a file — <code>_chat.txt</code>, <code>WhatsApp Chat with ….txt</code>, or the exported <code>.zip</code>.
+       Everything is parsed in your browser; no file is ever uploaded anywhere.</p>
+    <div class="btn-row">
+      <label class="btn" for="file" tabindex="0">Choose file</label>
+      <button class="btn ghost" id="demo" type="button">Try a demo chat</button>
+    </div>
+    <input id="file" type="file" accept=".txt,.zip,text/plain,application/zip" hidden>
+  </div>
+  <div class="err" id="err"></div>
+  <div id="busy"><span class="dot-pulse"></span><span id="busytext">Analysing…</span></div>
+
+  <div class="howto">
+    <section>
+      <h3>How to export</h3>
+      <ol>
+        <li>Open the chat in WhatsApp</li>
+        <li>Menu → <b>More</b> → <b>Export chat</b></li>
+        <li>Choose <b>Without media</b></li>
+        <li>Save the file, then drop it here</li>
+      </ol>
+    </section>
+    <section>
+      <h3>What works</h3>
+      <p>Group chats and one-to-one chats. iPhone and Android export layouts, 12- and 24-hour clocks,
+         D/M/Y and M/D/Y dates, and any language — words are counted in every script, not just Latin.</p>
+    </section>
+    <section>
+      <h3>Privacy</h3>
+      <p>The file is read with the browser's local file API and analysed in memory. There is no server,
+         no network request, no storage. Close the tab and it is gone.</p>
+    </section>
+  </div>
+</div>
+
+<!-- ============================================================ REPORT -->
+<div id="report">
+  <header class="masthead pad">
+    <p class="eyebrow" id="m-eyebrow"></p>
+    <h1 id="m-title"></h1>
+    <p class="sub" id="m-sub"></p>
+    <div class="toolbar">
+      <button class="tool" id="t-theme" type="button">◐ Theme</button>
+      <span class="tool">Dates
+        <select id="t-order">
+          <option value="auto">auto</option>
+          <option value="dmy">D/M/Y</option>
+          <option value="mdy">M/D/Y</option>
+        </select>
+      </span>
+      <button class="tool" id="t-new" type="button">↺ Analyse another chat</button>
+      <span class="tool" id="t-fmt"></span>
+    </div>
+  </header>
+  <div class="stats" id="m-stats"></div>
+  <nav aria-label="Report sections"><div class="nav-inner" id="m-nav"></div></nav>
+  <main id="m-main"></main>
+  <footer>
+    <h3>Method &amp; caveats</h3>
+    <div class="prose">
+      <ul>
+        <li><b>Participation is message count.</b> Reactions are not included in WhatsApp exports, so someone
+          who mostly reacts with ❤️ looks quieter here than they are in the chat.</li>
+        <li><b>Media are placeholders.</b> An export without media stores lines like <code>image omitted</code>;
+          the counts are exact but the content cannot be analysed.</li>
+        <li><b>Replies are inferred from sequence</b>, not from WhatsApp's quote metadata, which exports drop.
+          A "reply" is a message from a different person following someone else's, and response times are capped
+          at 6 hours so overnight gaps don't distort the medians.</li>
+        <li><b>Conversations</b> are runs of messages separated by more than 60 minutes of silence.</li>
+        <li><b>Timestamps are local to the phone that exported</b> the chat, and daylight-saving shifts are not
+          corrected. Ambiguous dates (both parts ≤ 12) fall back to D/M/Y — use the Dates control to override.</li>
+        <li><b>System notices</b> (group created, renamed, people added or removed, pinned messages) and
+          assistant replies from Meta AI are excluded from participation and reported separately.</li>
+        <li><b>Deleted messages</b> survive as a placeholder: they count as a message but contribute no words.</li>
+      </ul>
+    </div>
+    <div class="colophon">
+      <span id="f-src"></span>
+      <span>Analysed entirely in your browser</span>
+    </div>
+  </footer>
+</div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ==========================================================================
+   0 · small helpers
+   ========================================================================== */
+const $ = s => document.querySelector(s);
+const el = (tag, cls, txt) => { const e = document.createElement(tag);
+  if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+const nf   = n => (n == null || isNaN(n)) ? "–" : Math.round(n).toLocaleString();
+const nf1  = n => (n == null || isNaN(n)) ? "–" : (Math.round(n * 10) / 10).toLocaleString(undefined,{minimumFractionDigits:1});
+const nf2  = n => (n == null || isNaN(n)) ? "–" : (Math.round(n * 100) / 100).toLocaleString(undefined,{minimumFractionDigits:2});
+const pct  = n => (n == null || isNaN(n)) ? "–" : nf1(n) + "%";
+const clamp= (v,a,b) => Math.max(a, Math.min(b, v));
+const sum  = a => a.reduce((x,y)=>x+y, 0);
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const WDAYS  = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+const WD3    = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+
+function fmtDate(d){ return d.getDate().toString().padStart(2,"0") + " " + MONTHS[d.getMonth()] + " " + d.getFullYear(); }
+function fmtDateTime(d){
+  let h = d.getHours(), ap = h >= 12 ? "pm" : "am"; h = h % 12 || 12;
+  return fmtDate(d) + ", " + h + ":" + String(d.getMinutes()).padStart(2,"0") + " " + ap;
+}
+function fmtMins(m){
+  if (m == null || isNaN(m)) return "–";
+  if (m < 1)  return Math.round(m * 60) + " s";
+  if (m < 90) return nf1(m) + " min";
+  if (m < 60*36) return nf1(m/60) + " h";
+  return nf1(m/1440) + " d";
+}
+function dayKey(d){ return d.getFullYear()*10000 + (d.getMonth()+1)*100 + d.getDate(); }
+function keyToDate(k){ return new Date(Math.floor(k/10000), Math.floor(k/100)%100 - 1, k%100); }
+function monthKey(d){ return d.getFullYear()*100 + d.getMonth() + 1; }
+function monthLabel(k){ return MONTHS[(k%100)-1] + " " + String(Math.floor(k/100)).slice(2); }
+function quantile(sortedArr, q){
+  if (!sortedArr.length) return NaN;
+  const pos = (sortedArr.length - 1) * q, b = Math.floor(pos), r = pos - b;
+  return sortedArr[b+1] !== undefined ? sortedArr[b] + r*(sortedArr[b+1]-sortedArr[b]) : sortedArr[b];
+}
+function topN(map, n){
+  return [...map.entries()].sort((a,b)=>b[1]-a[1]).slice(0, n);
+}
+function inc(map, k, by){ map.set(k, (map.get(k) || 0) + (by === undefined ? 1 : by)); }
+
+/* ==========================================================================
+   1 · reading the file (plain text or the exported .zip)
+   ========================================================================== */
+async function readFile(file){
+  const head = new Uint8Array(await file.slice(0,4).arrayBuffer());
+  const isZip = head[0]===0x50 && head[1]===0x4B && (head[2]===3 || head[2]===5 || head[2]===7);
+  if (!isZip) return { text: await file.text(), name: file.name };
+  const entry = await unzipFirstTxt(await file.arrayBuffer());
+  return { text: entry.text, name: entry.name };
+}
+
+async function unzipFirstTxt(buffer){
+  const dv = new DataView(buffer), u8 = new Uint8Array(buffer);
+  let eocd = -1;
+  for (let i = u8.length - 22; i >= Math.max(0, u8.length - 66000); i--){
+    if (dv.getUint32(i, true) === 0x06054b50){ eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error("That .zip could not be read. Unzip it and drop the .txt file instead.");
+  const count = dv.getUint16(eocd + 10, true);
+  let p = dv.getUint32(eocd + 16, true);
+  const files = [];
+  for (let i = 0; i < count; i++){
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    const method = dv.getUint16(p + 10, true);
+    const compSize = dv.getUint32(p + 20, true);
+    const nameLen = dv.getUint16(p + 28, true);
+    const extraLen = dv.getUint16(p + 30, true);
+    const cmtLen  = dv.getUint16(p + 32, true);
+    const lho     = dv.getUint32(p + 42, true);
+    const name = new TextDecoder().decode(u8.subarray(p + 46, p + 46 + nameLen));
+    files.push({ name, method, compSize, lho });
+    p += 46 + nameLen + extraLen + cmtLen;
+  }
+  const cand = files.filter(f => /\.txt$/i.test(f.name) && !/^__MACOSX/.test(f.name))
+                    .sort((a,b) => b.compSize - a.compSize)[0];
+  if (!cand) throw new Error("No .txt file inside that .zip — export the chat again choosing “Without media”.");
+  const nameLen = dv.getUint16(cand.lho + 26, true), extraLen = dv.getUint16(cand.lho + 28, true);
+  const start = cand.lho + 30 + nameLen + extraLen;
+  const raw = u8.subarray(start, start + cand.compSize);
+  let bytes;
+  if (cand.method === 0) bytes = raw;
+  else if (cand.method === 8){
+    if (typeof DecompressionStream !== "function")
+      throw new Error("This browser cannot open zip files — unzip it and drop the .txt instead.");
+    const ds = new DecompressionStream("deflate-raw");
+    const stream = new Blob([raw]).stream().pipeThrough(ds);
+    bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+  } else throw new Error("Unsupported compression in that .zip — unzip it and drop the .txt instead.");
+  return { text: new TextDecoder("utf-8").decode(bytes), name: cand.name.split("/").pop() };
+}
+
+/* ==========================================================================
+   2 · parsing a WhatsApp export
+   ========================================================================== */
+const RE_IOS = /^\[(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4}),?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AaPp])?\.?[Mm]?\.?\]\s*(?:([^:]{1,80}):\s?)?([\s\S]*)$/;
+const RE_AND = /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4}),?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AaPp])?\.?[Mm]?\.?\s+[-–—]\s+(?:([^:]{1,80}):\s?)?([\s\S]*)$/;
+
+const RE_SYSTEM = new RegExp([
+  "created this group", "created group", "added you", "^you were added", " added ", " left$", " left the group",
+  " removed ", "joined using this group's invite link", "joined using the invite link",
+  "changed the group name", "changed the subject", "changed this group's icon", "changed the group description",
+  "changed the group settings", "pinned a message", "unpinned a message",
+  "messages and calls are end-to-end encrypted", "your security code with",
+  "changed their phone number", "is now an admin", "no longer an admin",
+  "deleted this group", "turned on disappearing messages", "turned off disappearing messages",
+  "disappearing messages were turned", "you blocked this contact", "you unblocked",
+  "missed voice call", "missed video call", "silenced group call", "waiting for this message",
+  "started a call", "tap to learn more", "only messages you send"
+].join("|"), "i");
+
+const MEDIA_RULES = [
+  [/sticker omitted|\bsticker\b\s*(omitted|excluded)/i, "sticker"],
+  [/image omitted|photo omitted|\bIMG-\d+|\.(jpe?g|png|webp|heic) \(file attached\)/i, "image"],
+  [/video omitted|\bVID-\d+|\.(mp4|mov|3gp) \(file attached\)/i, "video"],
+  [/audio omitted|\bPTT-\d+|\.(opus|m4a|mp3|ogg|wav) \(file attached\)|voice message omitted/i, "audio"],
+  [/GIF omitted/i, "GIF"],
+  [/document omitted|\.(pdf|docx?|xlsx?|pptx?|zip|apk|txt) \(file attached\)/i, "document"],
+  [/contact card omitted|\.vcf \(file attached\)/i, "contact"],
+  [/live location shared|location: https?:\/\/|shared a live location/i, "location"],
+  [/poll:|created a poll/i, "poll"],
+  [/<media omitted>|\(file attached\)|media omitted/i, "media"]
+];
+const RE_DELETED = /this message was deleted|you deleted this message|deleted this message/i;
+const RE_EDITED  = /<this message was edited>/i;
+const RE_URL     = /https?:\/\/[^\s<>"']+|www\.[^\s<>"']+/gi;
+const BOTS = new Set(["meta ai"]);
+
+function classify(text){
+  if (RE_DELETED.test(text)) return "deleted";
+  for (const [re, kind] of MEDIA_RULES) if (re.test(text)) return kind;
+  return "text";
+}
+function cleanBody(text){
+  let t = text.replace(RE_EDITED, "");
+  for (const [re] of MEDIA_RULES) t = t.replace(re, " ");
+  return t.replace(RE_DELETED, " ").replace(/\s+/g, " ").trim();
+}
+
+function parseChat(raw, dateOrder){
+  const text = raw.replace(/[‎‏‪-‮﻿]/g, "")
+                  .replace(/[  ]/g, " ").replace(/\r/g, "");
+  const lines = text.split("\n");
+
+  // pass 1 — headers, to learn the layout and the date order
+  const heads = [];
+  let iosHits = 0, andHits = 0, aMax = 0, bMax = 0;
+  for (const line of lines){
+    let m = RE_IOS.exec(line), fmt = "ios";
+    if (m) iosHits++;
+    else { m = RE_AND.exec(line); fmt = "android"; if (m) andHits++; }
+    if (!m) { heads.push(null); continue; }
+    const a = +m[1], b = +m[2];
+    if (a > aMax) aMax = a;
+    if (b > bMax) bMax = b;
+    heads.push({ m, fmt });
+  }
+  if (!iosHits && !andHits)
+    throw new Error("This file doesn't look like a WhatsApp export — no dated message lines were found.");
+
+  let order = dateOrder;
+  if (order === "auto") order = aMax > 12 ? "dmy" : (bMax > 12 ? "mdy" : "dmy");
+
+  // pass 2 — build messages, folding continuation lines into the previous one
+  const msgs = [];
+  for (let i = 0; i < lines.length; i++){
+    const h = heads[i];
+    if (!h){
+      if (msgs.length && lines[i] !== "") msgs[msgs.length-1].text += "\n" + lines[i];
+      continue;
+    }
+    const m = h.m;
+    const p1 = +m[1], p2 = +m[2];
+    let year = +m[3]; if (year < 100) year += year < 70 ? 2000 : 1900;
+    const day = order === "dmy" ? p1 : p2, mon = order === "dmy" ? p2 : p1;
+    let hour = +m[4]; const min = +m[5], sec = +(m[6] || 0), ap = m[7];
+    if (ap){ const pm = /p/i.test(ap); hour = hour % 12 + (pm ? 12 : 0); }
+    const d = new Date(year, mon - 1, day, hour, min, sec);
+    if (isNaN(d.getTime())) continue;
+    msgs.push({ d, sender: (m[8] || "").trim(), text: m[9] || "" });
+  }
+  if (!msgs.length) throw new Error("No messages could be read from this file.");
+  msgs.sort((x, y) => x.d - y.d);
+
+  // ---- who is a real person, who is the system, who is a bot
+  const perSender = new Map();
+  for (const m of msgs){
+    if (!m.sender) continue;
+    let s = perSender.get(m.sender);
+    if (!s){ s = { n: 0, sys: 0 }; perSender.set(m.sender, s); }
+    s.n++; if (RE_SYSTEM.test(m.text)) s.sys++;
+  }
+  const systemSenders = new Set();
+  for (const [name, s] of perSender)
+    if (s.sys / s.n > 0.75 && (s.n < 400 || s.sys / s.n > 0.95)) systemSenders.add(name);
+
+  const rows = [], system = [], botRows = [];
+  for (const m of msgs){
+    /* A notice is a line with no sender at all (both export layouts write them that way) or a
+       line from a "sender" that only ever produces notices — the group name, or "You".
+       Never judge a real person's message by its wording: people write "added", "left" too. */
+    const isSys = !m.sender || systemSenders.has(m.sender);
+    if (isSys){ system.push({ d: m.d, sender: m.sender, text: m.text.trim() }); continue; }
+    m.sender = m.sender.replace(/^~\s*/, "").trim();   // "~ Name" = a push name, not a contact
+    const type = classify(m.text);
+    const body = type === "text" ? m.text.replace(RE_EDITED, "").trim() : cleanBody(m.text);
+    const row = {
+      d: m.d, ts: m.d.getTime(), sender: m.sender, text: m.text, body, type,
+      media: type !== "text" && type !== "deleted",
+      edited: RE_EDITED.test(m.text),
+      chars: body.length,
+      words: body ? (body.match(/\S+/g) || []).length : 0
+    };
+    if (BOTS.has(m.sender.toLowerCase())) botRows.push(row); else rows.push(row);
+  }
+  if (!rows.length) throw new Error("Only system notices were found — no messages from people to analyse.");
+  return { rows, system, bots: botRows, order,
+           format: iosHits >= andHits ? "iPhone-style export" : "Android-style export" };
+}
+
+/* ==========================================================================
+   3 · text tools — emoji, words, scripts
+   ========================================================================== */
+let RE_EMOJI;
+try {
+  RE_EMOJI = /\p{RI}\p{RI}|\p{Extended_Pictographic}(?:\p{Emoji_Modifier}|️)*(?:‍\p{Extended_Pictographic}(?:\p{Emoji_Modifier}|️)*)*/gu;
+} catch(e){
+  RE_EMOJI = /[☀-➿]|[\uD83C-\uDBFF][\uDC00-\uDFFF]/g;
+}
+let RE_WORD;
+try { RE_WORD = /[\p{L}\p{M}][\p{L}\p{M}'’]{1,}/gu; }
+catch(e){ RE_WORD = /[A-Za-z][A-Za-z'’]{1,}/g; }
+
+const STOP = new Set(("a about after all also am an and any are as at be because been before but by can cant "+
+ "come could did do does doing done dont each even every for from get gets getting go going good got had has "+
+ "have having he her here hers him his how i id if ill im in into is it its ive just know like ll me more most "+
+ "much must my need no nor not now of off oh ok okay on once one only or other our out over own re said same "+
+ "say see she should so some such than that the their them then there these they this those through to too "+
+ "under until up us use ve very was we well were what when where which while who whom why will with would yes "+
+ "yet you your youre yours u ur pls plz thanks thank ya yeah yep nope hmm ohh https http www com net org "+
+ "youtu youtube instagram facebook igsh mibextid fbclid utm amp app whatsapp link null").split(" "));
+
+const SCRIPTS = [
+  ["Latin",      /[A-Za-zÀ-ɏ]/],
+  ["Malayalam",  /[ഀ-ൿ]/],
+  ["Devanagari", /[ऀ-ॿ]/],
+  ["Tamil",      /[஀-௿]/],
+  ["Telugu",     /[ఀ-౿]/],
+  ["Kannada",    /[ಀ-೿]/],
+  ["Bengali",    /[ঀ-৿]/],
+  ["Gurmukhi",   /[਀-੿]/],
+  ["Gujarati",   /[઀-૿]/],
+  ["Sinhala",    /[඀-෿]/],
+  ["Arabic",     /[؀-ۿ]/],
+  ["Hebrew",     /[֐-׿]/],
+  ["Cyrillic",   /[Ѐ-ӿ]/],
+  ["Greek",      /[Ͱ-Ͽ]/],
+  ["Thai",       /[฀-๿]/],
+  ["CJK",        /[一-鿿぀-ヿ가-힯]/]
+];
+const POS_EMOJI = new Set("😀😃😄😁😆😊🙂😉😍🥰😘😗😚🤗🤩🥳😎🤣😂🙃😌😇👍👌🙏💪🎉🎊❤️🧡💛💚💙💜🖤🤍💖💕💞💓🔥⭐✨🌟💯🥳😻👏🤝🫶🥹".match(RE_EMOJI) || []);
+const NEG_EMOJI = new Set("😞😔😟😕🙁☹️😣😖😫😩😢😭😤😠😡🤬😱😨😰😥😓🤢🤮💔👎😒😑😐🙄😬🥲😪😴🤒🤕😷".match(RE_EMOJI) || []);
+const RE_LAUGH  = /\b(?:ha){2,}\b|\bhe(?:he){1,}\b|\bhi(?:hi){1,}\b|\blo+l\b|\blmf?ao\b|\brofl\b|😂|🤣|😹|😆/i;
+
+function emojisOf(s){ RE_EMOJI.lastIndex = 0; return s.match(RE_EMOJI) || []; }
+function wordsOf(s){
+  RE_WORD.lastIndex = 0;
+  const out = [], m = s.toLowerCase().replace(RE_URL, " ").match(RE_WORD);
+  if (!m) return out;
+  for (const w of m) if (w.length > 2 && !STOP.has(w)) out.push(w);
+  return out;
+}
+
+/* ==========================================================================
+   4 · the analysis
+   ========================================================================== */
+const SESSION_GAP = 60 * 60 * 1000;   // 60 min of silence starts a new conversation
+const REPLY_CAP   = 6 * 60 * 60 * 1000;
+
+function analyse(parsed){
+  const rows = parsed.rows;
+  const A = { parsed, rows, n: rows.length };
+
+  /* ---- members, ranked by volume ---- */
+  const counts = new Map();
+  for (const r of rows) inc(counts, r.sender);
+  A.members = [...counts.entries()].sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
+  A.counts = counts;
+  A.isGroup = A.members.length > 2;
+  const idx = new Map(A.members.map((m,i)=>[m,i]));
+  A.colorOf = m => "var(--s" + (Math.min(idx.get(m) ?? 7, 7) + 1) + ")";
+  A.series = A.members.slice(0, 6);          // colour-carrying series cap
+  A.hasOther = A.members.length > 6;
+
+  /* ---- per-member accumulators ---- */
+  const P = new Map();
+  for (const m of A.members) P.set(m, {
+    name:m, msgs:0, words:0, chars:0, media:0, deleted:0, edited:0, links:0, emoji:0,
+    emojiMsgs:0, questions:0, exclaims:0, caps:0, laughs:0, posEmoji:0, negEmoji:0,
+    hours:new Array(24).fill(0), wdays:new Array(7).fill(0), days:new Set(),
+    lens:[], replies:[], instant:0, starters:0, enders:0, bursts:0, burstMax:0,
+    firstTs:Infinity, lastTs:-Infinity, types:new Map(), emojiCount:new Map(),
+    words_:new Map(), bigrams:new Map(), vocab:new Set(), scripts:new Map(),
+    longest:null, weekend:0, monthly:new Map()
+  });
+
+  /* ---- global accumulators ---- */
+  const byDay = new Map(), byMonth = new Map(), byMonthMember = new Map();
+  const hours = new Array(24).fill(0), wdays = new Array(7).fill(0);
+  const heat = Array.from({length:7}, () => new Array(24).fill(0));
+  const yearMonth = new Map(), typeTotals = new Map(), emojiAll = new Map();
+  const wordsAll = new Map(), bigramsAll = new Map(), domains = new Map();
+  const monthMembers = new Map();
+  let words = 0, chars = 0, media = 0, links = 0, emojiTotal = 0, deleted = 0, edited = 0;
+
+  for (const r of rows){
+    const p = P.get(r.sender), d = r.d;
+    const hr = d.getHours(), wd = (d.getDay() + 6) % 7, dk = dayKey(d), mk = monthKey(d);
+    p.msgs++; p.words += r.words; p.chars += r.chars;
+    p.hours[hr]++; p.wdays[wd]++; p.days.add(dk);
+    p.lens.push(r.chars);
+    if (wd >= 5) p.weekend++;
+    if (r.ts < p.firstTs) p.firstTs = r.ts;
+    if (r.ts > p.lastTs)  p.lastTs = r.ts;
+    inc(p.types, r.type); inc(typeTotals, r.type);
+    inc(p.monthly, mk);
+    words += r.words; chars += r.chars;
+    if (r.media){ p.media++; media++; }
+    if (r.type === "deleted"){ p.deleted++; deleted++; }
+    if (r.edited){ p.edited++; edited++; }
+
+    hours[hr]++; wdays[wd]++; heat[wd][hr]++;
+    inc(byDay, dk); inc(byMonth, mk);
+    inc(yearMonth, d.getFullYear()*100 + d.getMonth());
+    let mm = byMonthMember.get(mk); if (!mm){ mm = new Map(); byMonthMember.set(mk, mm); }
+    inc(mm, r.sender);
+    let ms = monthMembers.get(mk); if (!ms){ ms = new Set(); monthMembers.set(mk, ms); }
+    ms.add(r.sender);
+
+    if (!p.longest || r.chars > p.longest.chars) p.longest = r;
+
+    /* links */
+    RE_URL.lastIndex = 0;
+    const urls = r.body.match(RE_URL);
+    if (urls){
+      p.links += urls.length; links += urls.length;
+      for (const u of urls){
+        const dm = /^(?:https?:\/\/)?(?:www\.)?([^\/\s?#]+)/i.exec(u);
+        if (dm) inc(domains, dm[1].toLowerCase());
+      }
+    }
+    /* emoji */
+    const es = emojisOf(r.body);
+    if (es.length){
+      p.emoji += es.length; p.emojiMsgs++; emojiTotal += es.length;
+      for (const e of es){
+        inc(p.emojiCount, e); inc(emojiAll, e);
+        if (POS_EMOJI.has(e)) p.posEmoji++;
+        if (NEG_EMOJI.has(e)) p.negEmoji++;
+      }
+    }
+    /* tone signals */
+    if (r.type === "text"){
+      if (r.body.includes("?")) p.questions++;
+      if (r.body.includes("!")) p.exclaims++;
+      if (RE_LAUGH.test(r.body)) p.laughs++;
+      const letters = r.body.replace(/[^A-Za-z]/g, "");
+      if (letters.length >= 4 && letters === letters.toUpperCase()) p.caps++;
+      /* scripts */
+      for (const [name, re] of SCRIPTS) if (re.test(r.body)){ inc(p.scripts, name); break; }
+      /* words + bigrams */
+      const ws = wordsOf(r.body);
+      let prev = null;
+      for (const w of ws){
+        inc(p.words_, w); inc(wordsAll, w); p.vocab.add(w);
+        if (prev){ const bg = prev + " " + w; inc(p.bigrams, bg); inc(bigramsAll, bg); }
+        prev = w;
+      }
+    }
+  }
+
+  /* ---- sequence-based metrics: replies, sessions, bursts, who-follows-whom ---- */
+  const trans = new Map();          // "a→b" → count
+  const nameHits = new Map();       // "a→b" → times a wrote b's name
+  const firstNames = A.members.map(m => ({ m, re: new RegExp("\\b" + m.split(/\s+/)[0]
+      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i") }));
+  const sessions = [];
+  let sess = null, prev = null, runSender = null, runLen = 0;
+
+  for (const r of rows){
+    const p = P.get(r.sender);
+    if (prev){
+      const gap = r.ts - prev.ts;
+      if (r.sender !== prev.sender){
+        inc(trans, prev.sender + "→" + r.sender);
+        if (gap <= REPLY_CAP){
+          const mins = gap / 60000;
+          p.replies.push(mins);
+          if (mins <= 1) p.instant++;
+        }
+      }
+      if (gap > SESSION_GAP){
+        if (sess){ sess.end = prev.ts; sess.last = prev.sender; sessions.push(sess); }
+        sess = null;
+      }
+    }
+    if (!sess) sess = { start: r.ts, first: r.sender, n: 0, members: new Set() };
+    sess.n++; sess.members.add(r.sender);
+    /* bursts */
+    if (r.sender === runSender) runLen++;
+    else {
+      if (runSender){ const q = P.get(runSender); q.bursts++; q.burstMax = Math.max(q.burstMax, runLen); }
+      runSender = r.sender; runLen = 1;
+    }
+    /* name drops */
+    if (r.type === "text" && r.body.length < 400)
+      for (const fn of firstNames)
+        if (fn.m !== r.sender && fn.re.test(r.body)) inc(nameHits, r.sender + "→" + fn.m);
+    prev = r;
+  }
+  if (runSender){ const q = P.get(runSender); q.bursts++; q.burstMax = Math.max(q.burstMax, runLen); }
+  if (sess && prev){ sess.end = prev.ts; sess.last = prev.sender; sessions.push(sess); }
+  for (const s of sessions){
+    P.get(s.first).starters++;
+    P.get(s.last).enders++;
+  }
+
+  /* ---- finalise per-member stats ---- */
+  for (const p of P.values()){
+    p.lens.sort((a,b)=>a-b);
+    p.replies.sort((a,b)=>a-b);
+    p.share       = p.msgs / A.n * 100;
+    p.avgWords    = p.words / p.msgs;
+    p.medChars    = quantile(p.lens, .5);
+    p.replyMed    = quantile(p.replies, .5);
+    p.replyP90    = quantile(p.replies, .9);
+    p.instantPct  = p.replies.length ? p.instant / p.replies.length * 100 : NaN;
+    p.activeDays  = p.days.size;
+    p.perActive   = p.msgs / Math.max(1, p.days.size);
+    p.emojiPer100 = p.emoji / p.msgs * 100;
+    p.emojiMsgPct = p.emojiMsgs / p.msgs * 100;
+    p.qPct        = p.questions / p.msgs * 100;
+    p.laughPct    = p.laughs / p.msgs * 100;
+    p.capsPct     = p.caps / p.msgs * 100;
+    p.exclPct     = p.exclaims / p.msgs * 100;
+    p.weekendPct  = p.weekend / p.msgs * 100;
+    p.nightPct    = (p.hours[0]+p.hours[1]+p.hours[2]+p.hours[3]+p.hours[4]+p.hours[5]) / p.msgs * 100;
+    p.morningPct  = (p.hours[5]+p.hours[6]+p.hours[7]+p.hours[8]+p.hours[9]) / p.msgs * 100;
+    p.peakHour    = p.hours.indexOf(Math.max(...p.hours));
+    p.avgBurst    = p.msgs / Math.max(1, p.bursts);
+    p.richness    = p.vocab.size / Math.max(1, sum([...p.words_.values()])) * 100;
+    p.posRatio    = (p.posEmoji + p.negEmoji) ? p.posEmoji / (p.posEmoji + p.negEmoji) * 100 : NaN;
+    p.topEmoji    = topN(p.emojiCount, 6).map(x=>x[0]);
+    p.topWords    = topN(p.words_, 6).map(x=>x[0]);
+    /* quietest 6-hour block = sleep estimate */
+    let best = Infinity, bestH = 0;
+    for (let h = 0; h < 24; h++){
+      let s2 = 0; for (let k = 0; k < 6; k++) s2 += p.hours[(h+k)%24];
+      if (s2 < best){ best = s2; bestH = h; }
+    }
+    p.sleepFrom = bestH; p.sleepTo = (bestH + 6) % 24;
+  }
+  A.P = P;
+
+  /* ---- signature words: frequent for one person, rare for the others ---- */
+  const totalWordsBy = new Map([...P.values()].map(p => [p.name, sum([...p.words_.values()])]));
+  const grand = sum([...totalWordsBy.values()]);
+  for (const p of P.values()){
+    const mine = totalWordsBy.get(p.name) || 1, out = [];
+    for (const [w, c] of p.words_){
+      if (c < Math.max(5, mine * 0.0004)) continue;
+      let others = 0;
+      for (const q of P.values()) if (q !== p) others += q.words_.get(w) || 0;
+      const score = (c / mine) / ((others + 1) / Math.max(1, grand - mine));
+      out.push([w, score]);
+    }
+    p.signature = out.sort((a,b)=>b[1]-a[1]).slice(0,8).map(x=>x[0]);
+  }
+
+  /* ---- daily series, streaks, silences ---- */
+  const dayKeys = [...byDay.keys()].sort((a,b)=>a-b);
+  const firstD = keyToDate(dayKeys[0]), lastD = keyToDate(dayKeys[dayKeys.length-1]);
+  const daily = [];
+  for (let t = new Date(firstD); t <= lastD; t.setDate(t.getDate()+1))
+    daily.push({ d: new Date(t), k: dayKey(t), v: byDay.get(dayKey(t)) || 0 });
+  const roll = [], W = 30;
+  let acc = 0;
+  for (let i = 0; i < daily.length; i++){
+    acc += daily[i].v;
+    if (i >= W) acc -= daily[i-W].v;
+    roll.push(i >= W-1 ? acc / W : null);
+  }
+  let streak = 0, bestStreak = 0, streakEnd = null, silence = 0, bestSil = 0, silAt = null;
+  for (let i = 0; i < daily.length; i++){
+    if (daily[i].v > 0){
+      streak++; if (streak > bestStreak){ bestStreak = streak; streakEnd = daily[i].d; }
+      if (silence > bestSil){ bestSil = silence; silAt = daily[i].d; }
+      silence = 0;
+    } else { streak = 0; silence++; }
+  }
+
+  A.daily = daily; A.roll = roll;
+  A.byDay = byDay; A.byMonth = byMonth; A.byMonthMember = byMonthMember;
+  A.monthMembers = monthMembers;
+  A.hours = hours; A.wdays = wdays; A.heat = heat;
+  A.typeTotals = typeTotals; A.emojiAll = emojiAll; A.wordsAll = wordsAll;
+  A.bigramsAll = bigramsAll; A.domains = domains;
+  A.trans = trans; A.nameHits = nameHits; A.sessions = sessions;
+  A.words = words; A.chars = chars; A.media = media; A.links = links;
+  A.emojiTotal = emojiTotal; A.deleted = deleted; A.edited = edited;
+  A.first = rows[0].d; A.last = rows[rows.length-1].d;
+  A.spanDays = Math.max(1, Math.round((A.last - A.first) / 86400000));
+  A.activeDays = byDay.size;
+  A.bestStreak = bestStreak; A.streakEnd = streakEnd;
+  A.bestSilence = bestSil; A.silenceAt = silAt;
+  A.busiestDays = [...byDay.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10)
+    .map(([k,v]) => {
+      let top = null, best2 = -1, per = new Map();
+      for (const r of rows) if (dayKey(r.d) === k) inc(per, r.sender);
+      for (const [m,c] of per) if (c > best2){ best2 = c; top = m; }
+      return { k, d: keyToDate(k), v, top };
+    });
+  A.busiestMonth = [...byMonth.entries()].sort((a,b)=>b[1]-a[1])[0];
+  A.sessionStats = (() => {
+    const lens = sessions.map(s=>s.n).sort((a,b)=>a-b);
+    const durs = sessions.map(s=>(s.end - s.start)/60000).sort((a,b)=>a-b);
+    const longest = sessions.slice().sort((a,b)=>b.n-a.n)[0];
+    return { count: sessions.length, medLen: quantile(lens,.5), avgLen: sum(lens)/Math.max(1,lens.length),
+             medDur: quantile(durs,.5), longest };
+  })();
+  A.longestMsgs = rows.slice().sort((a,b)=>b.chars-a.chars).slice(0,5);
+  A.months = [...byMonth.keys()].sort((a,b)=>a-b);
+  A.years = [...new Set(rows.map(r=>r.d.getFullYear()))].sort();
+  return A;
+}
+
+/* ==========================================================================
+   5 · SVG chart kit
+   ========================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+function S(tag, attrs, kids){
+  const e = document.createElementNS(NS, tag);
+  if (attrs) for (const k in attrs) if (attrs[k] != null) e.setAttribute(k, attrs[k]);
+  if (kids) for (const k of kids) e.appendChild(k);
+  return e;
+}
+function TX(x, y, str, cls, extra){
+  const t = S("text", Object.assign({ x, y, class: cls || "ax" }, extra || {}));
+  t.textContent = str; return t;
+}
+function svgRoot(w, h){
+  return S("svg", { viewBox: "0 0 " + w + " " + h, preserveAspectRatio: "xMidYMid meet",
+                    role: "img", "aria-hidden": "false" });
+}
+const tip = el("div", "tip");
+document.body.appendChild(tip);
+function bindTip(node, html){
+  node.classList.add("mk");
+  node.addEventListener("mouseenter", () => { tip.innerHTML = html; tip.style.opacity = 1; });
+  node.addEventListener("mousemove", e => {
+    const x = Math.min(e.clientX + 14, window.innerWidth - 280);
+    tip.style.left = x + "px";
+    tip.style.top = Math.min(e.clientY + 16, window.innerHeight - 90) + "px";
+  });
+  node.addEventListener("mouseleave", () => { tip.style.opacity = 0; });
+}
+/* Ticks that always reach past the data, so the axis ends where the scale ends. */
+function niceTicks(max, n){
+  if (max <= 0) return [0];
+  const raw = max / n, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1,2,2.5,5,10].map(s=>s*mag).find(s => s >= raw) || 10*mag;
+  const out = []; for (let v = 0; v <= max - step*0.001; v += step) out.push(v);
+  out.push(out[out.length-1] + step);
+  return out;
+}
+const axisTop = ticks => ticks[ticks.length-1];
+
+/* ---- horizontal bars, direct-labelled ---- */
+function chartHBar(items, opt){
+  opt = opt || {};
+  const fmt = opt.fmt || nf;
+  const W = opt.W || 1000, k = W/1000, rowH = (opt.rowH || 40) * (opt.W ? 1.25 : 1),
+        padL = (opt.padL || 200) * k * (opt.W ? 1.3 : 1), padR = 92*k, padT = 12, padB = 34*Math.max(k,.7);
+  const H = padT + items.length * rowH + padB;
+  const dataMax = Math.max(...items.map(i=>i.value), 0.0001);
+  const ticks = niceTicks(dataMax, opt.W ? 3 : 5), max = axisTop(ticks);
+  const tickFmt = opt.tickFmt || (opt.pct
+    ? (v => (max < 1 ? nf2(v) : max < 5 ? nf1(v) : Math.round(v)) + "%")
+    : fmt);
+  const svg = svgRoot(W, H), plotW = W - padL - padR;
+  for (const t of ticks){
+    const x = padL + t/max*plotW;
+    svg.appendChild(S("line", { x1:x, y1:padT, x2:x, y2:padT+items.length*rowH, class:"grid" }));
+    svg.appendChild(TX(x, H-14, tickFmt(t), "axm", { "text-anchor":"middle" }));
+  }
+  items.forEach((it, i) => {
+    const y = padT + i*rowH, bh = Math.min(26*Math.max(k,.8), rowH - 12);
+    const w = Math.max(1.5, it.value/max*plotW);
+    const g = S("g");
+    const r = S("rect", { x:padL, y:y + (rowH-bh)/2, width:w, height:bh, rx:3,
+                          style:"fill:" + (it.color || "var(--s1)") });
+    g.appendChild(r);
+    g.appendChild(TX(padL - 12, y + rowH/2 + 4, it.label, "lbn", { "text-anchor":"end" }));
+    g.appendChild(TX(padL + w + 10, y + rowH/2 + 4, fmt(it.value), "lbl"));
+    bindTip(r, "<b>" + esc(it.label) + "</b><br>" + esc(it.tip || fmt(it.value)));
+    svg.appendChild(g);
+  });
+  svg.appendChild(S("line", { x1:padL, y1:padT, x2:padL, y2:padT+items.length*rowH, class:"base" }));
+  return svg;
+}
+
+/* ---- vertical bars ---- */
+function chartVBar(items, opt){
+  opt = opt || {};
+  const fmt = opt.fmt || nf, W = opt.W || 1000, k = W/1000, H = opt.h || (W < 700 ? 300 : 340),
+        padL = 62*Math.max(k,.75), padR = 14, padT = 16, padB = 46*Math.max(k,.75);
+  const dataMax = Math.max(...items.map(i=>i.value), 0.0001);
+  const ticks = niceTicks(dataMax, 5), max = axisTop(ticks);
+  const svg = svgRoot(W, H), plotW = W-padL-padR, plotH = H-padT-padB;
+  for (const t of ticks){
+    const y = padT + plotH - t/max*plotH;
+    svg.appendChild(S("line", { x1:padL, y1:y, x2:W-padR, y2:y, class:"grid" }));
+    svg.appendChild(TX(padL-10, y+4, fmt(t), "axm", { "text-anchor":"end" }));
+  }
+  const bw = plotW / items.length;
+  items.forEach((it, i) => {
+    const h = it.value/max*plotH, x = padL + i*bw, y = padT + plotH - h;
+    const r = S("rect", { x: x + bw*0.14, y, width: bw*0.72, height: Math.max(1, h), rx:3,
+                          style:"fill:" + (it.color || "var(--s1)") });
+    bindTip(r, "<b>" + esc(it.label) + "</b><br>" + esc(it.tip || fmt(it.value)));
+    svg.appendChild(r);
+    if (!opt.everyOther || i % opt.everyOther === 0)
+      svg.appendChild(TX(x + bw/2, H-24, it.short || it.label, "ax", { "text-anchor":"middle" }));
+    if (it.mark) svg.appendChild(TX(x + bw/2, y-8, fmt(it.value), "lbl", { "text-anchor":"middle" }));
+  });
+  svg.appendChild(S("line", { x1:padL, y1:padT+plotH, x2:W-padR, y2:padT+plotH, class:"base" }));
+  return svg;
+}
+
+/* ---- 100% stacked rows ---- */
+function chartStack100(rows, keys, opt){
+  opt = opt || {};
+  const W = 1000, rowH = 46, padL = opt.padL || 190, padR = 20, padT = 10, padB = 30;
+  const H = padT + rows.length*rowH + padB;
+  const svg = svgRoot(W, H), plotW = W-padL-padR;
+  for (const t of [0,25,50,75,100]){
+    const x = padL + t/100*plotW;
+    svg.appendChild(S("line", { x1:x, y1:padT, x2:x, y2:padT+rows.length*rowH, class:"grid" }));
+    svg.appendChild(TX(x, H-10, t + "%", "axm", { "text-anchor":"middle" }));
+  }
+  rows.forEach((row, i) => {
+    const y = padT + i*rowH, bh = 28, total = sum(keys.map(k=>row.vals[k.key]||0)) || 1;
+    let x = padL;
+    svg.appendChild(TX(padL-12, y+rowH/2+4, row.label, "lbn", { "text-anchor":"end" }));
+    keys.forEach(k => {
+      const v = row.vals[k.key] || 0; if (!v) return;
+      const w = v/total*plotW;
+      const r = S("rect", { x, y: y+(rowH-bh)/2, width: Math.max(0.5, w-2), height: bh, rx:2,
+                            style:"fill:" + k.color });
+      bindTip(r, "<b>" + esc(row.label) + " · " + esc(k.label) + "</b><br>" +
+                  nf(v) + " (" + pct(v/total*100) + ")");
+      svg.appendChild(r);
+      if (w > 62) svg.appendChild(TX(x + w/2, y+rowH/2+4, Math.round(v/total*100) + "%",
+        "lbl", { "text-anchor":"middle", style:"fill:#fff" }));
+      x += w;
+    });
+  });
+  return svg;
+}
+
+/* ---- grouped bars ---- */
+function chartGrouped(groups, keys, opt){
+  opt = opt || {};
+  const fmt = opt.fmt || nf, W = 1000, H = opt.h || 360, padL = 62, padR = 14, padT = 16, padB = 48;
+  const dataMax = Math.max(...groups.map(g => Math.max(...keys.map(k => g.vals[k.key]||0))), 0.0001);
+  const ticks = niceTicks(dataMax, 5), max = axisTop(ticks);
+  const svg = svgRoot(W, H), plotW = W-padL-padR, plotH = H-padT-padB;
+  for (const t of ticks){
+    const y = padT + plotH - t/max*plotH;
+    svg.appendChild(S("line", { x1:padL, y1:y, x2:W-padR, y2:y, class:"grid" }));
+    svg.appendChild(TX(padL-10, y+4, fmt(t), "axm", { "text-anchor":"end" }));
+  }
+  const gw = plotW/groups.length, bw = gw*0.78/keys.length;
+  groups.forEach((g, i) => {
+    keys.forEach((k, j) => {
+      const v = g.vals[k.key] || 0, h = v/max*plotH;
+      const x = padL + i*gw + gw*0.11 + j*bw, y = padT + plotH - h;
+      const r = S("rect", { x, y, width: Math.max(1, bw-2), height: Math.max(0.6, h), rx:2,
+                            style:"fill:" + k.color });
+      bindTip(r, "<b>" + esc(k.label) + "</b><br>" + esc(g.label) + ": " + fmt(v));
+      svg.appendChild(r);
+    });
+    svg.appendChild(TX(padL + i*gw + gw/2, H-26, g.label, "ax", { "text-anchor":"middle" }));
+  });
+  svg.appendChild(S("line", { x1:padL, y1:padT+plotH, x2:W-padR, y2:padT+plotH, class:"base" }));
+  return svg;
+}
+
+/* ---- stacked columns ---- */
+function chartStackedCols(groups, keys, opt){
+  opt = opt || {};
+  const fmt = opt.fmt || nf, W = 1000, H = opt.h || 380, padL = 66, padR = 14, padT = 22, padB = 44;
+  const totals = groups.map(g => sum(keys.map(k=>g.vals[k.key]||0)));
+  const ticks = niceTicks(Math.max(...totals, 0.0001), 5), max = axisTop(ticks);
+  const svg = svgRoot(W, H), plotW = W-padL-padR, plotH = H-padT-padB;
+  for (const t of ticks){
+    const y = padT + plotH - t/max*plotH;
+    svg.appendChild(S("line", { x1:padL, y1:y, x2:W-padR, y2:y, class:"grid" }));
+    svg.appendChild(TX(padL-10, y+4, fmt(t), "axm", { "text-anchor":"end" }));
+  }
+  const gw = plotW/groups.length, bw = Math.min(gw*0.62, 90);
+  groups.forEach((g, i) => {
+    let yTop = padT + plotH;
+    keys.forEach(k => {
+      const v = g.vals[k.key] || 0; if (!v) return;
+      const h = v/max*plotH; yTop -= h;
+      const r = S("rect", { x: padL + i*gw + (gw-bw)/2, y: yTop, width: bw, height: Math.max(0.6, h-1.5),
+                            rx:2, style:"fill:" + k.color });
+      bindTip(r, "<b>" + esc(k.label) + "</b><br>" + esc(g.label) + ": " + fmt(v) +
+                 " (" + pct(v/(totals[i]||1)*100) + " of " + esc(g.label) + ")");
+      svg.appendChild(r);
+    });
+    svg.appendChild(TX(padL + i*gw + gw/2, padT + plotH - totals[i]/max*plotH - 8, fmt(totals[i]),
+      "lbl", { "text-anchor":"middle" }));
+    svg.appendChild(TX(padL + i*gw + gw/2, H-22, g.label, "ax", { "text-anchor":"middle" }));
+  });
+  svg.appendChild(S("line", { x1:padL, y1:padT+plotH, x2:W-padR, y2:padT+plotH, class:"base" }));
+  return svg;
+}
+
+/* ---- area + line over an ordered series ---- */
+function chartArea(points, opt){
+  opt = opt || {};
+  const fmt = opt.fmt || nf, W = 1000, H = opt.h || 320, padL = 66, padR = 16, padT = 18, padB = 42;
+  const ticks = niceTicks(Math.max(...points.map(p=>p.v), ...(opt.line || []).map(v=>v||0), 0.0001), 4),
+        max = axisTop(ticks);
+  const svg = svgRoot(W, H), plotW = W-padL-padR, plotH = H-padT-padB;
+  const X = i => padL + (points.length === 1 ? plotW/2 : i/(points.length-1)*plotW);
+  const Y = v => padT + plotH - v/max*plotH;
+  for (const t of ticks){
+    const y = Y(t);
+    svg.appendChild(S("line", { x1:padL, y1:y, x2:W-padR, y2:y, class:"grid" }));
+    svg.appendChild(TX(padL-10, y+4, fmt(t), "axm", { "text-anchor":"end" }));
+  }
+  let path = "", area = "M" + padL + "," + (padT+plotH);
+  points.forEach((p, i) => {
+    const x = X(i), y = Y(p.v);
+    path += (i ? "L" : "M") + x.toFixed(1) + "," + y.toFixed(1);
+    area += "L" + x.toFixed(1) + "," + y.toFixed(1);
+  });
+  area += "L" + X(points.length-1) + "," + (padT+plotH) + "Z";
+  svg.appendChild(S("path", { d: area, style:"fill:" + (opt.color || "var(--s1)") + ";opacity:.16" }));
+  svg.appendChild(S("path", { d: path, fill:"none", "stroke-width": opt.line ? 1 : 2,
+    style:"stroke:" + (opt.color || "var(--s1)") + (opt.line ? ";opacity:.42" : "") }));
+  if (opt.line){
+    let lp = "", started = false;
+    opt.line.forEach((v, i) => {
+      if (v == null) return;
+      lp += (started ? "L" : "M") + X(i).toFixed(1) + "," + Y(v).toFixed(1); started = true;
+    });
+    svg.appendChild(S("path", { d: lp, fill:"none", "stroke-width":2.4,
+      style:"stroke:" + (opt.lineColor || "var(--accent-2)") }));
+  }
+  /* hover columns */
+  const bw = plotW/Math.max(1, points.length);
+  points.forEach((p, i) => {
+    const r = S("rect", { x: X(i)-bw/2, y: padT, width: Math.max(1.5,bw), height: plotH, fill:"transparent" });
+    bindTip(r, "<b>" + esc(p.label) + "</b><br>" + fmt(p.v) + (opt.unit || " messages"));
+    svg.appendChild(r);
+  });
+  (opt.ticks || []).forEach(t => {
+    svg.appendChild(TX(X(t.i), H-20, t.label, "ax", { "text-anchor":"middle" }));
+  });
+  if (opt.peak != null){
+    const i = opt.peak, x = X(i), y = Y(points[i].v);
+    svg.appendChild(S("circle", { cx:x, cy:y, r:4.5, style:"fill:" + (opt.lineColor || "var(--accent-2)"),
+      stroke:"var(--paper)", "stroke-width":2 }));
+    svg.appendChild(TX(clamp(x, padL+80, W-padR-80), y-12, points[i].label + " · " + fmt(points[i].v),
+      "lbl", { "text-anchor":"middle" }));
+  }
+  svg.appendChild(S("line", { x1:padL, y1:padT+plotH, x2:W-padR, y2:padT+plotH, class:"base" }));
+  return svg;
+}
+
+/* ---- small multiples (one row per series, shared scale) ---- */
+function chartSmall(series, opt){
+  opt = opt || {};
+  const fmt = opt.fmt || nf, W = 1000, rowH = opt.rowH || 84, padL = 150, padR = 16, padT = 10, padB = 30;
+  const H = padT + series.length*rowH + padB;
+  const max = Math.max(...series.map(s => Math.max(...s.values)), 0.0001);
+  const svg = svgRoot(W, H), plotW = W-padL-padR;
+  series.forEach((s, si) => {
+    const y0 = padT + si*rowH, h = rowH - 18;
+    svg.appendChild(S("line", { x1:padL, y1:y0+h, x2:W-padR, y2:y0+h, class:"grid" }));
+    const n = s.values.length;
+    const X = i => padL + (n === 1 ? plotW/2 : i/(n-1)*plotW);
+    const Y = v => y0 + h - v/max*h;
+    if (opt.bars){
+      const bw = plotW/n;
+      s.values.forEach((v, i) => {
+        const bh = v/max*h;
+        const r = S("rect", { x: padL + i*bw + bw*0.12, y: y0+h-bh, width: bw*0.76,
+                              height: Math.max(0.6, bh), rx:1.5, style:"fill:" + s.color });
+        bindTip(r, "<b>" + esc(s.name) + "</b><br>" + esc(s.labels ? s.labels[i] : i) + ": " + fmt(v));
+        svg.appendChild(r);
+      });
+    } else {
+      let p = "", a = "M" + X(0) + "," + (y0+h);
+      s.values.forEach((v, i) => { p += (i?"L":"M") + X(i).toFixed(1) + "," + Y(v).toFixed(1);
+                                   a += "L" + X(i).toFixed(1) + "," + Y(v).toFixed(1); });
+      a += "L" + X(n-1) + "," + (y0+h) + "Z";
+      svg.appendChild(S("path", { d:a, style:"fill:" + s.color + ";opacity:.2" }));
+      svg.appendChild(S("path", { d:p, fill:"none", "stroke-width":2, style:"stroke:" + s.color }));
+      const bw = plotW/n;
+      s.values.forEach((v, i) => {
+        const r = S("rect", { x:X(i)-bw/2, y:y0, width:Math.max(1.5,bw), height:h, fill:"transparent" });
+        bindTip(r, "<b>" + esc(s.name) + "</b><br>" + esc(s.labels ? s.labels[i] : i) + ": " + fmt(v));
+        svg.appendChild(r);
+      });
+    }
+    svg.appendChild(TX(padL-14, y0+h/2, s.name, "lbn", { "text-anchor":"end" }));
+    if (s.note) svg.appendChild(TX(padL-14, y0+h/2+16, s.note, "ax", { "text-anchor":"end" }));
+  });
+  (opt.ticks || []).forEach(t => {
+    const n = series[0].values.length;
+    const x = padL + (n === 1 ? plotW/2 : t.i/(n-1)*plotW);
+    svg.appendChild(TX(x, H-12, t.label, "ax", { "text-anchor":"middle" }));
+  });
+  return svg;
+}
+
+/* ---- heatmap / matrix ---- */
+function chartHeat(rowLabels, colLabels, values, opt){
+  opt = opt || {};
+  const W = 1000, padL = opt.padL || 120, padR = 16, padT = 12,
+        padB = opt.rotate ? 96 : 40;
+  const cw = (W-padL-padR)/colLabels.length;
+  const ch = opt.cellH || Math.min(46, Math.max(24, 300/rowLabels.length));
+  const H = padT + rowLabels.length*ch + padB;
+  const max = Math.max(...values.flat(), 0.0001);
+  const svg = svgRoot(W, H);
+  values.forEach((row, i) => row.forEach((v, j) => {
+    const t = v/max;
+    const r = S("rect", { x: padL + j*cw, y: padT + i*ch, width: cw-1.5, height: ch-1.5, rx:2,
+                          style:"fill:var(--seq)", "fill-opacity": (v === 0 ? 0.05 : 0.12 + t*0.88) });
+    bindTip(r, "<b>" + esc(rowLabels[i]) + " · " + esc(colLabels[j]) + "</b><br>" +
+               (opt.fmt ? opt.fmt(v) : nf(v)));
+    svg.appendChild(r);
+    if (opt.cellText && (cw > 34)){
+      const label = opt.cellText(v, i, j);
+      if (label != null && label !== "")
+        svg.appendChild(TX(padL + j*cw + cw/2 - 0.75, padT + i*ch + ch/2 + 4, label,
+          t > 0.55 ? "cellhi" : "celllo", { "text-anchor":"middle" }));
+    }
+  }));
+  rowLabels.forEach((l, i) =>
+    svg.appendChild(TX(padL-12, padT + i*ch + ch/2 + 4, l, "lbn", { "text-anchor":"end" })));
+  colLabels.forEach((l, j) => {
+    if (opt.rotate){
+      const t = TX(padL + j*cw + cw/2, H-padB+30, l, "ax", { "text-anchor":"end",
+        transform: "rotate(-38 " + (padL + j*cw + cw/2) + " " + (H-padB+30) + ")" });
+      svg.appendChild(t);
+    } else if (!opt.everyOther || j % opt.everyOther === 0)
+      svg.appendChild(TX(padL + j*cw + cw/2, H-padB+22, l, "ax", { "text-anchor":"middle" }));
+  });
+  return svg;
+}
+
+/* ---- contribution calendar for one year ---- */
+function chartCalendar(year, byDay, max){
+  /* `max` is the colour ceiling (a high percentile), not the record day */
+  const cell = 15, gap = 3, W = 1000, padL = 42, padT = 26;
+  const jan1 = new Date(year, 0, 1), dec31 = new Date(year, 11, 31);
+  const startCol = (jan1.getDay() + 6) % 7;
+  const days = Math.round((dec31 - jan1) / 86400000) + 1;
+  const weeks = Math.ceil((days + startCol) / 7);
+  const H = padT + 7*(cell+gap) + 26;
+  const svg = svgRoot(W, H);
+  const scale = W - padL - 20, cw = Math.min(cell + gap, scale/weeks);
+  for (let i = 0; i < days; i++){
+    const d = new Date(year, 0, 1 + i), k = dayKey(d), v = byDay.get(k) || 0;
+    const idx = startCol + i, col = Math.floor(idx/7), row = idx % 7;
+    const t = max ? v/max : 0;
+    const r = S("rect", { x: padL + col*cw, y: padT + row*(cell+gap), width: cw-3, height: cell, rx:2.5,
+      style:"fill:var(--seq)", "fill-opacity": v ? 0.16 + Math.sqrt(t)*0.84 : 0.06 });
+    bindTip(r, "<b>" + fmtDate(d) + "</b><br>" + (v ? nf(v) + " messages" : "silent"));
+    svg.appendChild(r);
+  }
+  for (let m = 0; m < 12; m++){
+    const first = new Date(year, m, 1);
+    const idx = startCol + Math.round((first - jan1)/86400000);
+    svg.appendChild(TX(padL + Math.floor(idx/7)*cw, padT-8, MONTHS[m], "ax"));
+  }
+  [0,2,4,6].forEach(r => svg.appendChild(TX(padL-8, padT + r*(cell+gap) + 11, WD3[r], "ax",
+    { "text-anchor":"end" })));
+  return svg;
+}
+
+/* ---- histogram ---- */
+function chartHist(bins, opt){
+  opt = opt || {};
+  return chartVBar(bins.map(b => ({ label: b.label, short: b.short, value: b.v,
+    color: opt.color || "var(--s1)", tip: nf(b.v) + " " + (opt.unit || "messages") })),
+    { h: opt.h, W: opt.W, everyOther: opt.everyOther || 1, fmt: nf });
+}
+
+/* ---- word cloud (spiral placement, collision-checked) ---- */
+function chartCloud(words, colorFn){
+  const W = 1000, H = 460, svg = svgRoot(W, H);
+  if (!words.length) return svg;
+  const maxC = words[0][1], minC = words[words.length-1][1];
+  const placed = [];
+  const scale = c => 15 + 62 * Math.pow((c - minC) / Math.max(1, maxC - minC), 0.62);
+  words.forEach(([w, c], i) => {
+    const fs = scale(c), wpx = w.length * fs * 0.56, hpx = fs * 1.05;
+    let angle = 0, rad = 0, x = W/2, y = H/2, ok = false;
+    for (let step = 0; step < 900; step++){
+      x = W/2 + rad * Math.cos(angle) - wpx/2;
+      y = H/2 + rad * Math.sin(angle) * 0.62;
+      const box = { x, y: y - hpx*0.75, w: wpx, h: hpx };
+      if (box.x > 4 && box.x + box.w < W-4 && box.y > 4 && box.y + box.h < H-4 &&
+          !placed.some(p => !(box.x + box.w < p.x || box.x > p.x + p.w ||
+                              box.y + box.h < p.y || box.y > p.y + p.h))){
+        placed.push(box); ok = true; break;
+      }
+      angle += 0.42; rad += 1.35;
+    }
+    if (!ok) return;
+    const t = TX(x, y, w, null, { style: "fill:" + colorFn(i, c, maxC, minC) + ";font-size:" +
+      fs.toFixed(1) + "px;font-family:var(--sans);font-weight:" + (fs > 40 ? 600 : 500) });
+    bindTip(t, "<b>" + esc(w) + "</b><br>" + nf(c) + " uses");
+    svg.appendChild(t);
+  });
+  return svg;
+}
+
+/* ==========================================================================
+   6 · DOM building blocks
+   ========================================================================== */
+function esc(s){ return String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
+
+function card(title, sub, node, table){
+  const c = el("div", "card");
+  if (title) c.appendChild(el("h3", null, title));
+  if (sub) c.appendChild(el("p", "csub", sub));
+  if (node) c.appendChild(node);
+  if (table){
+    const d = el("details", "data");
+    d.appendChild(el("summary", null, "Show data"));
+    d.appendChild(tableEl(table.cols, table.rows));
+    c.appendChild(d);
+  }
+  return c;
+}
+function legend(keys){
+  const l = el("div", "legend");
+  keys.forEach(k => {
+    const s = el("span");
+    const i = el("i"); i.style.background = k.color;
+    s.appendChild(i); s.appendChild(document.createTextNode(k.label));
+    l.appendChild(s);
+  });
+  return l;
+}
+function tableEl(cols, rows){
+  const wrap = el("div", "tw"), t = el("table");
+  const thead = el("thead"), tr = el("tr");
+  cols.forEach((c, i) => { const th = el("th", i === 0 ? "l" : null, c); tr.appendChild(th); });
+  thead.appendChild(tr); t.appendChild(thead);
+  const tb = el("tbody");
+  rows.forEach(r => {
+    const tr2 = el("tr");
+    r.forEach((cell, i) => {
+      if (i === 0){ const th = el("th"); if (cell instanceof Node) th.appendChild(cell); else th.innerHTML = cell; tr2.appendChild(th); }
+      else { const td = el("td", typeof cell === "string" && cell.length > 28 ? "wrap" : null);
+             if (cell instanceof Node) td.appendChild(cell); else td.innerHTML = cell; tr2.appendChild(td); }
+    });
+    tb.appendChild(tr2);
+  });
+  t.appendChild(tb); wrap.appendChild(t);
+  return wrap;
+}
+function nameCell(A, m){
+  return '<span class="dotc" style="background:' + A.colorOf(m) + '"></span>' + esc(m);
+}
+function facts(pairs){
+  const f = el("div", "facts");
+  pairs.forEach(([k, v]) => {
+    f.appendChild(el("div", "fk", k));
+    const d = el("div", "fv"); d.innerHTML = v; f.appendChild(d);
+  });
+  return f;
+}
+
+/* ==========================================================================
+   7 · the report
+   ========================================================================== */
+const SECTIONS = [];
+const NAV_LABEL = {
+  "s-part":"Participation", "s-vol":"Words & length", "s-types":"Message types",
+  "s-time":"Over time", "s-cal":"Calendar", "s-rhythm":"Day & week",
+  "s-conv":"Conversations", "s-inter":"Who answers whom", "s-tone":"Tone",
+  "s-emoji":"Emoji", "s-words":"Vocabulary", "s-links":"Links",
+  "s-records":"Records", "s-members":"Everyone"
+};
+function section(num, id, title, intro){
+  const s = el("section", "sec"); s.id = id;
+  const h = el("div", "sec-head");
+  h.appendChild(el("span", "sec-num", String(num).padStart(2, "0")));
+  h.appendChild(el("h2", null, title));
+  s.appendChild(h);
+  if (intro){ const p = el("p", "sec-intro"); p.innerHTML = intro; s.appendChild(p); }
+  SECTIONS.push({ id, title, nav: NAV_LABEL[id] || title });
+  return s;
+}
+
+function buildReport(A){
+  const main = $("#m-main"); main.innerHTML = ""; SECTIONS.length = 0;
+  const P = A.P, members = A.members;
+  const seriesKeys = A.series.map(m => ({ key: m, label: m, color: A.colorOf(m) }));
+  if (A.hasOther) seriesKeys.push({ key: "__other", label: "Other members", color: "var(--ink-3)" });
+  const valFor = (map, m) => (m === "__other"
+      ? sum(members.slice(6).map(x => map.get(x) || 0)) : (map.get(m) || 0));
+
+  /* ---------- masthead ---------- */
+  const who = A.isGroup ? "group chat" : "one-to-one chat";
+  $("#m-eyebrow").innerHTML = esc(A.parsed.format) + " &nbsp;·&nbsp; <b>" +
+    fmtDate(A.first) + " – " + fmtDate(A.last) + "</b>";
+  $("#m-title").textContent = A.isGroup
+    ? "Who is really talking in this chat?"
+    : "Two people, " + nf(A.n) + " messages";
+  $("#m-sub").textContent = nf(A.n) + " messages from " + members.length + " " +
+    (members.length === 1 ? "person" : "people") + " over " + nf(A.spanDays) + " days of " + who +
+    " — counted, ranked and pulled apart by hour, weekday, media, emoji, vocabulary and reply speed.";
+  $("#t-fmt").textContent = "dates read as " + (A.parsed.order === "dmy" ? "D/M/Y" : "M/D/Y");
+  $("#f-src").textContent = nf(A.n) + " messages parsed · " + nf(A.parsed.system.length) + " system notices";
+
+  const stats = $("#m-stats"); stats.innerHTML = "";
+  [[nf(A.n), "messages"],
+   [String(members.length), A.isGroup ? "participants" : "people"],
+   [nf(A.activeDays), "days with messages"],
+   [nf1(A.n/Math.max(1,A.activeDays)), "messages / active day"],
+   [nf(A.words), "words typed"],
+   [nf(A.media), "photos, voice notes, files"],
+   [nf(A.emojiTotal), "emoji used"],
+   [nf(A.links), "links shared"]
+  ].forEach(([n, l]) => {
+    const d = el("div", "stat");
+    d.appendChild(el("div", "stat-n", n));
+    d.appendChild(el("div", "stat-l", l));
+    stats.appendChild(d);
+  });
+
+  /* ================= 1 · participation ================= */
+  {
+    const s = section(1, "s-part", "Participation — who sends the messages",
+      "The headline count: every message anyone sent, ranked. Colour stays with a person for the rest of the report.");
+    s.appendChild(card("Messages sent", "Direct count per participant",
+      chartHBar(members.map(m => ({ label: m, value: P.get(m).msgs, color: A.colorOf(m),
+        tip: nf(P.get(m).msgs) + " messages · " + pct(P.get(m).share) + " of the chat" }))),
+      { cols:["Participant","Messages","Share","Words","Media","Active days"],
+        rows: members.map(m => { const p = P.get(m);
+          return [nameCell(A,m), nf(p.msgs), pct(p.share), nf(p.words), nf(p.media), nf(p.activeDays)]; }) }));
+
+    const shareKeys = members.slice(0, 8).map(m => ({ key:m, label:m, color:A.colorOf(m) }));
+    const shareRow = { label:"", vals:{} };
+    members.forEach((m, i) => { const k = i < 8 ? m : "__rest"; shareRow.vals[k] = (shareRow.vals[k]||0) + P.get(m).msgs; });
+    if (members.length > 8) shareKeys.push({ key:"__rest", label:"Everyone else", color:"var(--ink-3)" });
+    const st = chartStack100([shareRow], shareKeys, { padL: 24 });
+    const shareCard = card("Share of the conversation", "Every message ever sent, split by author", st);
+    shareCard.appendChild(legend(shareKeys));
+    s.appendChild(shareCard);
+
+    const top2 = members.slice(0,2).reduce((a,m)=>a+P.get(m).share, 0);
+    s.appendChild(facts([
+      ["Most active", nameCell(A, members[0]) + " — " + nf(P.get(members[0]).msgs) +
+        " messages (" + pct(P.get(members[0]).share) + ")"],
+      ["Quietest", nameCell(A, members[members.length-1]) + " — " +
+        nf(P.get(members[members.length-1]).msgs) + " messages (" + pct(P.get(members[members.length-1]).share) + ")"],
+      ["Concentration", "the top " + Math.min(2, members.length) + " carry " + pct(top2) + " of everything said"],
+      ["Balance", A.isGroup
+        ? "a perfectly even chat would give everyone " + pct(100/members.length) + " each"
+        : "a perfectly even chat would be 50 / 50"]
+    ]));
+
+    s.appendChild(card("Messages per active day", "Intensity when they do show up — volume divided by the days they wrote on",
+      chartHBar(members.map(m => ({ label:m, value:P.get(m).perActive, color:A.colorOf(m),
+        tip: nf1(P.get(m).perActive) + " messages on each of their " + nf(P.get(m).activeDays) + " active days" })),
+        { fmt: nf1 })));
+    main.appendChild(s);
+  }
+
+  /* ================= 2 · volume & style ================= */
+  {
+    const s = section(2, "s-vol", "Talkers versus writers",
+      "Message count rewards whoever taps send most often. Words and message length tell a different story.");
+    const g = el("div", "grid2");
+    g.appendChild(card("Words written", null,
+      chartHBar(members.map(m => ({ label:m, value:P.get(m).words, color:A.colorOf(m) })), { W:620 })));
+    g.appendChild(card("Words per message", "Average length of one message",
+      chartHBar(members.map(m => ({ label:m, value:P.get(m).avgWords, color:A.colorOf(m) })),
+        { fmt: nf1, W:620 })));
+    g.appendChild(card("Median message length", "Characters in a typical message",
+      chartHBar(members.map(m => ({ label:m, value:P.get(m).medChars, color:A.colorOf(m) })),
+        { fmt: nf, W:620 })));
+    g.appendChild(card("Vocabulary richness", "Distinct words as a share of all words that person wrote",
+      chartHBar(members.map(m => ({ label:m, value:P.get(m).richness, color:A.colorOf(m),
+        tip: nf(P.get(m).vocab.size) + " distinct words" })),
+        { fmt: v => pct(v), pct: true, W:620 })));
+    s.appendChild(g);
+
+    /* length histogram */
+    const edges = [1,2,5,10,20,40,80,160,320,640,1e9];
+    const labels = ["1","2–4","5–9","10–19","20–39","40–79","80–159","160–319","320–639","640+"];
+    const bins = labels.map((l,i) => ({ label:l, v:0 }));
+    for (const r of A.rows){
+      if (!r.chars) continue;
+      for (let i = 0; i < edges.length-1; i++)
+        if (r.chars >= edges[i] && r.chars < edges[i+1]){ bins[i].v++; break; }
+    }
+    s.appendChild(card("How long is a message?", "All messages by character count",
+      chartHist(bins, { unit:"messages" }),
+      { cols:["Length (characters)","Messages"], rows: bins.map(b => [b.label, nf(b.v)]) }));
+
+    s.appendChild(card("Longest messages", "The five biggest walls of text, trimmed to 220 characters",
+      null,
+      { cols:["Author","When","Characters","Opening"],
+        rows: A.longestMsgs.map(r => [nameCell(A, r.sender), fmtDate(r.d), nf(r.chars),
+          esc(r.body.slice(0,220)) + (r.body.length > 220 ? "…" : "")]) }));
+    main.appendChild(s);
+  }
+
+  /* ================= 3 · message types ================= */
+  {
+    const s = section(3, "s-types", "What kind of messages?",
+      "Text, photos, voice notes, stickers and the rest. Exports store media as placeholders, so the counts are exact even though the content is gone.");
+    const allTypes = [...A.typeTotals.entries()].sort((a,b)=>b[1]-a[1]);
+    const keep = allTypes.slice(0,6).map(x=>x[0]);
+    const typeKeys = keep.map((t,i) => ({ key:t, label:t, color:"var(--s" + (i+1) + ")" }));
+    if (allTypes.length > 6) typeKeys.push({ key:"__other", label:"other", color:"var(--ink-3)" });
+
+    const rows = members.map(m => {
+      const p = P.get(m), vals = {};
+      keep.forEach(t => vals[t] = p.types.get(t) || 0);
+      vals.__other = sum([...p.types.entries()].filter(([t])=>!keep.includes(t)).map(x=>x[1]));
+      return { label:m, vals };
+    });
+    const mixCard = card("Message mix per person", "Share of each person's own messages",
+      chartStack100(rows, typeKeys),
+      { cols:["Participant", ...typeKeys.map(k=>k.label), "Total"],
+        rows: rows.map(r => [nameCell(A, r.label), ...typeKeys.map(k=>nf(r.vals[k.key]||0)),
+          nf(sum(typeKeys.map(k=>r.vals[k.key]||0)))]) });
+    mixCard.appendChild(legend(typeKeys));
+    s.appendChild(mixCard);
+
+    s.appendChild(card("Overall message types", "The whole chat, by type",
+      chartHBar(allTypes.map(([t,c],i) => ({ label:t, value:c,
+        color:i < 6 ? "var(--s"+(i+1)+")" : "var(--ink-3)",
+        tip: nf(c) + " (" + pct(c/A.n*100) + " of all messages)" })), { rowH:34, padL:150 })));
+
+    const mediaTypes = allTypes.filter(([t]) => t !== "text" && t !== "deleted").map(x=>x[0]);
+    if (mediaTypes.length){
+      const gc = card("Who shares which media", "Counts per person",
+        chartGrouped(mediaTypes.map(t => ({ label:t, vals: Object.fromEntries(
+          seriesKeys.map(k => [k.key, k.key === "__other"
+            ? sum(members.slice(6).map(m => P.get(m).types.get(t) || 0))
+            : (P.get(k.key).types.get(t) || 0)])) })), seriesKeys));
+      gc.appendChild(legend(seriesKeys));
+      s.appendChild(gc);
+    }
+    main.appendChild(s);
+  }
+
+  /* ================= 4 · timeline ================= */
+  {
+    const s = section(4, "s-time", "The chat over time",
+      "When the conversation ran hot, when it went quiet, and whose voice dominated each stretch.");
+    /* per year stacked */
+    const years = A.years;
+    if (years.length > 1){
+      const groups = years.map(y => {
+        const vals = {};
+        seriesKeys.forEach(k => vals[k.key] = 0);
+        for (const r of A.rows) if (r.d.getFullYear() === y){
+          const key = A.series.includes(r.sender) ? r.sender : "__other";
+          if (vals[key] != null) vals[key]++;
+        }
+        return { label: String(y), vals };
+      });
+      const yc = card("Messages per year", "Stacked by participant",
+        chartStackedCols(groups, seriesKeys),
+        { cols:["Year", ...seriesKeys.map(k=>k.label), "Total"],
+          rows: groups.map(g => [g.label, ...seriesKeys.map(k=>nf(g.vals[k.key]||0)),
+            nf(sum(seriesKeys.map(k=>g.vals[k.key]||0)))]) });
+      yc.appendChild(legend(seriesKeys));
+      s.appendChild(yc);
+    }
+    /* monthly volume */
+    const months = A.months;
+    const mpoints = months.map(k => ({ label: monthLabel(k), v: A.byMonth.get(k) || 0 }));
+    const mticks = months.map((k,i) => ({ k, i })).filter(x => (x.k % 100) === 1)
+      .map(x => ({ i: x.i, label: String(Math.floor(x.k/100)) }));
+    const peak = mpoints.reduce((bi, p, i, arr) => p.v > arr[bi].v ? i : bi, 0);
+    s.appendChild(card("Monthly volume", "Total messages per calendar month",
+      chartArea(mpoints, { ticks: mticks.length ? mticks : months.map((k,i)=>({i,label:monthLabel(k)})).filter((_,i)=>i%3===0),
+                           peak }),
+      { cols:["Month","Messages"], rows: mpoints.map(p => [p.label, nf(p.v)]) }));
+
+    /* monthly share */
+    if (members.length > 1){
+      const rows2 = months.map(k => {
+        const mm = A.byMonthMember.get(k) || new Map(), vals = {};
+        seriesKeys.forEach(kk => vals[kk.key] = valFor(mm, kk.key));
+        return { label: monthLabel(k), vals };
+      });
+      const sc = card("Who dominated each month", "Each person's share of that month's messages",
+        chartStack100Vertical(rows2, seriesKeys, mticks));
+      sc.appendChild(legend(seriesKeys));
+      s.appendChild(sc);
+    }
+    /* per-member monthly small multiples */
+    s.appendChild(card("Each person, month by month", "Same scale for everyone",
+      chartSmall(A.series.map(m => ({ name:m, color:A.colorOf(m),
+        note: nf(P.get(m).msgs) + " total",
+        labels: months.map(monthLabel),
+        values: months.map(k => (A.byMonthMember.get(k) || new Map()).get(m) || 0) })),
+        { ticks: mticks })));
+
+    /* daily timeline */
+    const dpoints = A.daily.map(d => ({ label: fmtDate(d.d), v: d.v }));
+    const dticks = A.daily.map((d,i) => ({ d, i })).filter(x => x.d.d.getMonth() === 0 && x.d.d.getDate() === 1)
+      .map(x => ({ i:x.i, label:String(x.d.d.getFullYear()) }));
+    s.appendChild(card("Every single day", "Faint line: raw daily count · bold line: 30-day average",
+      chartArea(dpoints, { line: A.roll, ticks: dticks })));
+
+    /* monthly active members */
+    if (A.isGroup){
+      s.appendChild(card("How many people were active each month",
+        "Distinct senders per month — the group's pulse, not its volume",
+        chartArea(months.map(k => ({ label: monthLabel(k), v: (A.monthMembers.get(k) || new Set()).size })),
+          { unit: " people", fmt: nf, ticks: mticks, color:"var(--s3)" })));
+    }
+    main.appendChild(s);
+  }
+
+  /* ================= 5 · calendar ================= */
+  {
+    const s = section(5, "s-cal", "Year by year, day by day",
+      "One square per day; the darker the square, the more was said. Gaps show holidays, fallings-out and phone changes.");
+    const sortedDays = [...A.byDay.values()].sort((a,b)=>a-b);
+    const maxDay = Math.max(quantile(sortedDays, 0.97), 1);   // colour ceiling, not the record
+    A.years.forEach(y => {
+      s.appendChild(card(String(y), null, chartCalendar(y, A.byDay, maxDay)));
+    });
+    s.appendChild(el("p", "note", "Full colour = " + nf(maxDay) +
+      "+ messages in a day; the record is " + nf(Math.max(...A.byDay.values())) + "."));
+    main.appendChild(s);
+  }
+
+  /* ================= 6 · rhythms ================= */
+  {
+    const s = section(6, "s-rhythm", "The rhythm of the day and week",
+      "Chats have a heartbeat: a peak hour, a busiest weekday, and a dead zone while everyone sleeps.");
+    const peakH = A.hours.indexOf(Math.max(...A.hours));
+    const g = el("div", "grid2");
+    g.appendChild(card("By hour of day", "Peak hour: " + String(peakH).padStart(2,"0") + ":00",
+      chartVBar(A.hours.map((v,h) => ({ label: String(h).padStart(2,"0") + ":00",
+        short: String(h).padStart(2,"0"), value:v, mark: h === peakH,
+        color: h === peakH ? "var(--s2)" : "var(--s1)" })), { everyOther:2, W:640 })));
+    const peakW = A.wdays.indexOf(Math.max(...A.wdays));
+    g.appendChild(card("By weekday", "Busiest: " + WDAYS[peakW],
+      chartVBar(A.wdays.map((v,i) => ({ label: WDAYS[i], short: WD3[i], value:v, mark:true,
+        color: i === peakW ? "var(--s2)" : "var(--s1)" })), { W:640 })));
+    s.appendChild(g);
+
+    let hot = { v:-1 };
+    A.heat.forEach((row,i) => row.forEach((v,j) => { if (v > hot.v) hot = { v, i, j }; }));
+    s.appendChild(card("Weekday × hour", "Hottest: " + WDAYS[hot.i] + " at " +
+      String(hot.j).padStart(2,"0") + ":00 (" + nf(hot.v) + " messages)",
+      chartHeat(WDAYS, Array.from({length:24}, (_,h) => String(h).padStart(2,"0")), A.heat,
+        { padL:110, cellH:40, everyOther:1 })));
+
+    /* month × year grid */
+    if (A.years.length > 1){
+      const vals = A.years.map(y => MONTHS.map((_, m) => A.byMonth.get(y*100 + m + 1) || 0));
+      s.appendChild(card("Month × year", "The seasonal shape of the chat",
+        chartHeat(A.years.map(String), MONTHS, vals,
+          { padL:80, cellH:38, cellText: v => v ? nf(v) : "" })));
+    }
+
+    s.appendChild(card("Each person's clock", "Share of that person's own messages, by hour",
+      chartSmall(A.series.map(m => { const p = P.get(m);
+        return { name:m, color:A.colorOf(m), note:"peak " + String(p.peakHour).padStart(2,"0") + ":00",
+                 labels: p.hours.map((_,h)=>String(h).padStart(2,"0") + ":00"),
+                 values: p.hours.map(v => v / p.msgs * 100) }; }),
+        { bars:true, rowH:76, fmt: v => pct(v),
+          ticks: Array.from({length:12}, (_,i)=>({ i:i*2, label:String(i*2).padStart(2,"0") })) })));
+
+    const g2 = el("div", "grid3");
+    g2.appendChild(card("Night owls", "Share of own messages sent 00:00–05:59",
+      chartHBar(members.map(m => ({ label:m, value:P.get(m).nightPct, color:A.colorOf(m) })),
+        { fmt: pct, pct: true, padL:150, W:470 })));
+    g2.appendChild(card("Early birds", "Share sent 05:00–09:59",
+      chartHBar(members.map(m => ({ label:m, value:P.get(m).morningPct, color:A.colorOf(m) })),
+        { fmt: pct, pct: true, padL:150, W:470 })));
+    g2.appendChild(card("Weekend people", "Share of own messages sent on Sat/Sun",
+      chartHBar(members.map(m => ({ label:m, value:P.get(m).weekendPct, color:A.colorOf(m) })),
+        { fmt: pct, pct: true, padL:150, W:470 })));
+    s.appendChild(g2);
+
+    s.appendChild(card("Estimated sleep window", "The quietest six-hour block in each person's day — a rough guess at when they're offline",
+      null, { cols:["Participant","Quiet from","Quiet until","Peak hour","Messages after midnight"],
+        rows: members.map(m => { const p = P.get(m);
+          return [nameCell(A,m), String(p.sleepFrom).padStart(2,"0") + ":00",
+                  String(p.sleepTo).padStart(2,"0") + ":00",
+                  String(p.peakHour).padStart(2,"0") + ":00", pct(p.nightPct)]; }) }));
+    main.appendChild(s);
+  }
+
+  /* ================= 7 · conversations ================= */
+  {
+    const st = A.sessionStats;
+    const s = section(7, "s-conv", "Conversations",
+      "A conversation here is a run of messages with no gap longer than an hour. That makes it possible to ask who opens them and who has the last word.");
+    s.appendChild(facts([
+      ["Conversations", nf(st.count)],
+      ["Typical size", nf1(st.medLen) + " messages (median) · " + nf1(st.avgLen) + " average"],
+      ["Typical length", fmtMins(st.medDur)],
+      ["Longest ever", st.longest ? nf(st.longest.n) + " messages on " + fmtDate(new Date(st.longest.start)) +
+        ", running " + fmtMins((st.longest.end - st.longest.start)/60000) : "–"],
+      ["Conversations per active day", nf1(st.count / Math.max(1, A.activeDays))]
+    ]));
+    const g = el("div", "grid2");
+    g.appendChild(card("Who opens the conversation", "First message after an hour or more of silence",
+      chartHBar(members.map(m => ({ label:m, value:P.get(m).starters, color:A.colorOf(m),
+        tip: nf(P.get(m).starters) + " openings · " + pct(P.get(m).starters/st.count*100) + " of all conversations" })),
+        { padL:150, W:620 })));
+    g.appendChild(card("Who gets the last word", "Sent the final message before the chat went quiet",
+      chartHBar(members.map(m => ({ label:m, value:P.get(m).enders, color:A.colorOf(m),
+        tip: nf(P.get(m).enders) + " last words · " + pct(P.get(m).enders/st.count*100) + " of all conversations" })),
+        { padL:150, W:620 })));
+    s.appendChild(g);
+
+    const cbins = [[1,1,"1"],[2,3,"2–3"],[4,7,"4–7"],[8,15,"8–15"],[16,31,"16–31"],
+                   [32,63,"32–63"],[64,127,"64–127"],[128,1e9,"128+"]];
+    const cb = cbins.map(([a,b,l]) => ({ label:l, v: A.sessions.filter(x => x.n >= a && x.n <= b).length }));
+    s.appendChild(card("Conversation sizes", "How many messages a conversation runs to",
+      chartHist(cb, { unit:"conversations", color:"var(--s3)" })));
+    main.appendChild(s);
+  }
+
+  /* ================= 8 · interaction ================= */
+  if (members.length > 1) {
+    const s = section(8, "s-inter", "Who talks to whom",
+      "Exports carry no reply threading, so interaction is read from sequence: who speaks straight after whom, how fast, and in how many messages at a time.");
+    const mm = members.slice(0, 8);
+    const matrix = mm.map(a => {
+      const total = sum(mm.map(b => a === b ? 0 : (A.trans.get(a + "→" + b) || 0)));
+      return mm.map(b => a === b ? 0 : (A.trans.get(a + "→" + b) || 0) / Math.max(1,total) * 100);
+    });
+    s.appendChild(card("Who answers whom", "Row = speaker, column = who spoke next. Each row adds to 100%.",
+      chartHeat(mm, mm, matrix, { padL:170, cellH:44, rotate:true,
+        fmt: v => pct(v), cellText: (v,i,j) => i === j ? "—" : Math.round(v) + "%" })));
+
+    const g = el("div", "grid2");
+    g.appendChild(card("Median reply time", "Answering someone else, replies within 6 hours only",
+      chartHBar(members.map(m => ({ label:m, value:P.get(m).replyMed, color:A.colorOf(m),
+        tip:"median " + fmtMins(P.get(m).replyMed) + " · 90th percentile " + fmtMins(P.get(m).replyP90) })),
+        { fmt: v => fmtMins(v), padL:150, W:620 })));
+    g.appendChild(card("Instant replies", "Share of their replies sent within 60 seconds",
+      chartHBar(members.map(m => ({ label:m, value:P.get(m).instantPct, color:A.colorOf(m) })),
+        { fmt: pct, pct: true, padL:150, W:620 })));
+    g.appendChild(card("Slow tail", "90th-percentile reply time — how long a patient answer takes",
+      chartHBar(members.map(m => ({ label:m, value:P.get(m).replyP90, color:A.colorOf(m) })),
+        { fmt: v => fmtMins(v), padL:150, W:620 })));
+    g.appendChild(card("Messages per turn", "How many messages they send before someone else speaks",
+      chartHBar(members.map(m => ({ label:m, value:P.get(m).avgBurst, color:A.colorOf(m),
+        tip:"longest run: " + nf(P.get(m).burstMax) + " messages" })), { fmt: nf2, padL:150, W:620 })));
+    s.appendChild(g);
+
+    if (A.isGroup && A.nameHits.size){
+      const nmat = mm.map(a => mm.map(b => a === b ? 0 : (A.nameHits.get(a + "→" + b) || 0)));
+      s.appendChild(card("Name-dropping", "How often one person writes another's first name",
+        chartHeat(mm, mm, nmat, { padL:170, cellH:42, rotate:true,
+          cellText: (v,i,j) => i === j ? "—" : (v ? nf(v) : "") })));
+    }
+    main.appendChild(s);
+  }
+
+  /* ================= 9 · tone ================= */
+  {
+    const s = section(9, "s-tone", "Tone and habits",
+      "Rough but revealing signals: who laughs, who asks the questions, who shouts, and whose emoji lean positive.");
+    const g = el("div", "grid3");
+    g.appendChild(card("Laughter", "Messages with haha / lol / 😂 / 🤣",
+      chartHBar(members.map(m => ({ label:m, value:P.get(m).laughPct, color:A.colorOf(m),
+        tip: nf(P.get(m).laughs) + " laughing messages" })),
+        { fmt: pct, pct: true, padL:140, W:470 })));
+    g.appendChild(card("Questions", "Messages containing a question mark",
+      chartHBar(members.map(m => ({ label:m, value:P.get(m).qPct, color:A.colorOf(m),
+        tip: nf(P.get(m).questions) + " questions" })),
+        { fmt: pct, pct: true, padL:140, W:470 })));
+    g.appendChild(card("Exclamation", "Messages containing “!”",
+      chartHBar(members.map(m => ({ label:m, value:P.get(m).exclPct, color:A.colorOf(m) })),
+        { fmt: pct, pct: true, padL:140, W:470 })));
+    g.appendChild(card("SHOUTING", "Messages written in all caps",
+      chartHBar(members.map(m => ({ label:m, value:P.get(m).capsPct, color:A.colorOf(m),
+        tip: nf(P.get(m).caps) + " all-caps messages" })),
+        { fmt: pct, pct: true, padL:140, W:470 })));
+    g.appendChild(card("Emoji positivity", "Share of their emotional emoji that are positive",
+      chartHBar(members.map(m => ({ label:m, value: isNaN(P.get(m).posRatio) ? 0 : P.get(m).posRatio,
+        color:A.colorOf(m), tip: nf(P.get(m).posEmoji) + " positive · " + nf(P.get(m).negEmoji) + " negative" })),
+        { fmt: pct, pct: true, padL:140, W:470 })));
+    g.appendChild(card("Second thoughts", "Messages deleted or edited",
+      chartHBar(members.map(m => ({ label:m, value:P.get(m).deleted + P.get(m).edited, color:A.colorOf(m),
+        tip: nf(P.get(m).deleted) + " deleted · " + nf(P.get(m).edited) + " edited" })),
+        { padL:140, W:470 })));
+    s.appendChild(g);
+    main.appendChild(s);
+  }
+
+  /* ================= 10 · emoji ================= */
+  if (A.emojiTotal) {
+    const s = section(10, "s-emoji", "Emoji",
+      nf(A.emojiTotal) + " emoji, " + nf(A.emojiAll.size) + " distinct. Tables carry the glyphs; charts carry the counts.");
+    const g = el("div", "grid2");
+    g.appendChild(card("Emoji intensity", "Emoji used per 100 messages",
+      chartHBar(members.map(m => ({ label:m, value:P.get(m).emojiPer100, color:A.colorOf(m),
+        tip: nf(P.get(m).emoji) + " emoji in total" })), { fmt: nf1, padL:150, W:620 })));
+    g.appendChild(card("Messages carrying an emoji", "Share of the person's own messages",
+      chartHBar(members.map(m => ({ label:m, value:P.get(m).emojiMsgPct, color:A.colorOf(m) })),
+        { fmt: pct, pct: true, padL:150, W:620 })));
+    s.appendChild(g);
+
+    const top = topN(A.emojiAll, 20), maxE = top.length ? top[0][1] : 1;
+    s.appendChild(card("The chat's top 20 emoji", null, null,
+      { cols:["#","Emoji","Uses","Share",""],
+        rows: top.map(([e,c],i) => [String(i+1), '<span class="emo">' + esc(e) + '</span>', nf(c),
+          pct(c/A.emojiTotal*100),
+          '<span style="display:inline-block;height:9px;border-radius:2px;background:var(--s1);width:' +
+            (c/maxE*100).toFixed(1) + '%;min-width:2px"></span>']) }));
+
+    s.appendChild(card("Everyone's favourites", "Top six emoji per person",
+      null, { cols:["Participant","Favourites","Total emoji","Distinct"],
+        rows: members.map(m => { const p = P.get(m);
+          return [nameCell(A,m), '<span class="emo">' + esc(p.topEmoji.join(" ")) + '</span>',
+                  nf(p.emoji), nf(p.emojiCount.size)]; }) }));
+
+    const t10 = top.slice(0,10).map(x=>x[0]);
+    if (t10.length && members.length > 1)
+      s.appendChild(card("Who uses the chat's favourite emoji", "Counts per person",
+        null, { cols:["Participant", ...t10.map(e=>'<span class="emo">'+esc(e)+'</span>'), "Total"],
+          rows: members.map(m => { const p = P.get(m);
+            return [nameCell(A,m), ...t10.map(e => nf(p.emojiCount.get(e) || 0)), nf(p.emoji)]; }) }));
+    main.appendChild(s);
+  }
+
+  /* ================= 11 · words ================= */
+  {
+    const s = section(11, "s-words", "Words",
+      "Stop-words and links are stripped; every script is counted, not just Latin, so transliterated and native-script chats both work.");
+    const tw = topN(A.wordsAll, 25);
+    if (tw.length){
+      s.appendChild(card("Most-used words", nf(sum([...A.wordsAll.values()])) + " words counted",
+        chartHBar(tw.slice(0,20).map(([w,c]) => ({ label:w, value:c, color:"var(--s1)" })),
+          { rowH:30, padL:180 }),
+        { cols:["Word","Uses"], rows: tw.map(([w,c]) => [esc(w), nf(c)]) }));
+      s.appendChild(card("The chat's vocabulary", "Size follows frequency",
+        chartCloud(topN(A.wordsAll, 140), (i, c, hi, lo) =>
+          "var(--seq);fill-opacity:" + (0.45 + 0.55 * (c - lo) / Math.max(1, hi - lo)).toFixed(2))));
+    }
+    const bg = topN(A.bigramsAll, 15);
+    if (bg.length)
+      s.appendChild(card("Most-used phrases", "Two-word pairs, stop-words removed", null,
+        { cols:["Phrase","Uses"], rows: bg.map(([w,c]) => [esc(w), nf(c)]) }));
+
+    s.appendChild(card("Signature words", "Frequent for that person, rare for everyone else",
+      null, { cols:["Participant","Their words","Distinctively theirs","Words written"],
+        rows: members.map(m => { const p = P.get(m);
+          return [nameCell(A,m), esc(p.topWords.join(", ")), esc(p.signature.join(", ")), nf(p.words)]; }) }));
+
+    /* scripts */
+    const scriptNames = new Set();
+    members.forEach(m => P.get(m).scripts.forEach((_, k) => scriptNames.add(k)));
+    if (scriptNames.size > 1){
+      const sn = [...scriptNames];
+      s.appendChild(card("Writing systems", "Messages classified by the script they are typed in",
+        null, { cols:["Participant", ...sn], rows: members.map(m => {
+          const p = P.get(m);
+          return [nameCell(A,m), ...sn.map(k => { const v = p.scripts.get(k) || 0;
+            return v ? nf(v) + " <span style='color:var(--ink-3)'>(" + pct(v/p.msgs*100) + ")</span>" : "–"; })];
+        }) }));
+    }
+    main.appendChild(s);
+  }
+
+  /* ================= 12 · links ================= */
+  if (A.links) {
+    const s = section(12, "s-links", "Links",
+      nf(A.links) + " links across " + nf(A.domains.size) + " domains — the reels, articles and rabbit holes the chat passes around.");
+    const g = el("div", "grid2");
+    g.appendChild(card("Links shared", null,
+      chartHBar(members.map(m => ({ label:m, value:P.get(m).links, color:A.colorOf(m),
+        tip: nf1(P.get(m).links/P.get(m).msgs*100) + " links per 100 messages" })), { padL:150, W:620 })));
+    const dom = topN(A.domains, 15);
+    g.appendChild(card("Where the links point", null,
+      chartHBar(dom.map(([d,c]) => ({ label:d, value:c, color:"var(--s1)" })), { padL:210, W:620 }),
+      { cols:["Domain","Links"], rows: dom.map(([d,c]) => [esc(d), nf(c)]) }));
+    s.appendChild(g);
+    main.appendChild(s);
+  }
+
+  /* ================= 13 · records ================= */
+  {
+    const s = section(13, "s-records", "Records and milestones",
+      "The extremes: the loudest days, the longest run, the deepest silence.");
+    s.appendChild(card("The 10 busiest days", "Bar colour marks who wrote most that day",
+      chartHBar(A.busiestDays.map(d => ({ label: fmtDate(d.d), value:d.v, color:A.colorOf(d.top),
+        tip: nf(d.v) + " messages · busiest voice: " + d.top })), { rowH:34, padL:190 }),
+      { cols:["Date","Messages","Top voice"],
+        rows: A.busiestDays.map(d => [fmtDate(d.d), nf(d.v), nameCell(A, d.top)]) }));
+
+    s.appendChild(facts([
+      ["First message", fmtDateTime(A.first) + " — " + nameCell(A, A.rows[0].sender)],
+      ["Latest message", fmtDateTime(A.last) + " — " + nameCell(A, A.rows[A.rows.length-1].sender)],
+      ["Busiest day", fmtDate(A.busiestDays[0].d) + " — " + nf(A.busiestDays[0].v) + " messages"],
+      ["Busiest month", monthLabel(A.busiestMonth[0]) + " — " + nf(A.busiestMonth[1]) + " messages"],
+      ["Longest daily streak", nf(A.bestStreak) + " days" + (A.streakEnd ? " (ending " + fmtDate(A.streakEnd) + ")" : "")],
+      ["Longest silence", nf(A.bestSilence) + " days" + (A.silenceAt ? " (broken " + fmtDate(A.silenceAt) + ")" : "")],
+      ["Quiet days", nf(A.spanDays - A.activeDays) + " of " + nf(A.spanDays) + " days had nothing at all"]
+    ]));
+
+    /* system events */
+    const evs = A.parsed.system.filter(e => /changed the group name|changed the subject|added|left|removed|created/i.test(e.text));
+    if (evs.length){
+      const show = evs.slice(-14).reverse();
+      s.appendChild(card("Group history", nf(A.parsed.system.length) + " system notices in the export — the last " +
+        show.length + " milestones", null,
+        { cols:["When","Event"], rows: show.map(e => [fmtDate(e.d), esc(e.text.slice(0,160))]) }));
+    }
+    main.appendChild(s);
+  }
+
+  /* ================= 14 · member profiles ================= */
+  {
+    const s = section(14, "s-members", "Everyone, side by side",
+      "One card per person, then the same numbers as a ranked matrix — darker means higher within that column.");
+    const cards = el("div", "mcards");
+    members.forEach((m, i) => {
+      const p = P.get(m), c = el("div", "mcard");
+      const h = el("header");
+      const dot = el("span", "dotc"); dot.style.background = A.colorOf(m); dot.style.width = "11px"; dot.style.height = "11px";
+      h.appendChild(dot); h.appendChild(el("h3", null, m)); h.appendChild(el("span", "rank", "#" + (i+1)));
+      c.appendChild(h);
+      const dl = el("dl");
+      [["messages", nf(p.msgs)], ["share", pct(p.share)], ["words", nf(p.words)],
+       ["words / message", nf1(p.avgWords)], ["media", nf(p.media)], ["links", nf(p.links)],
+       ["conversations opened", nf(p.starters)], ["last words", nf(p.enders)],
+       ["median reply", fmtMins(p.replyMed)], ["days present", nf(p.activeDays)],
+       ["peak hour", String(p.peakHour).padStart(2,"0") + ":00"], ["after midnight", pct(p.nightPct)],
+       ["emoji / 100 msgs", nf1(p.emojiPer100)], ["laughs", pct(p.laughPct)]
+      ].forEach(([k,v]) => { const d = el("div"); d.appendChild(el("dt", null, k));
+        d.appendChild(el("dd", null, v)); dl.appendChild(d); });
+      c.appendChild(dl);
+      if (p.topEmoji.length){
+        const f = el("p", "mfoot"); f.appendChild(el("span", "lab", "favourite emoji"));
+        const e = el("span", "emo", p.topEmoji.join(" ")); f.appendChild(e); c.appendChild(f);
+      }
+      if (p.topWords.length){
+        const f2 = el("p", "mfoot"); f2.appendChild(el("span", "lab", "most-typed words"));
+        f2.appendChild(document.createTextNode(p.topWords.join(", "))); c.appendChild(f2);
+      }
+      cards.appendChild(c);
+    });
+    s.appendChild(cards);
+
+    const cols = [["messages","msgs",p=>p.msgs,nf], ["words","words",p=>p.words,nf],
+      ["words/msg","w/m",p=>p.avgWords,nf1], ["media","media",p=>p.media,nf],
+      ["links","links",p=>p.links,nf], ["emoji/100","emoji",p=>p.emojiPer100,nf1],
+      ["msgs/day","m/day",p=>p.perActive,nf1], ["opened","open",p=>p.starters,nf],
+      ["last word","last",p=>p.enders,nf], ["per turn","turn",p=>p.avgBurst,nf2],
+      ["night %","night",p=>p.nightPct,nf1], ["laugh %","laugh",p=>p.laughPct,nf1]];
+    const raw = members.map(m => cols.map(c => c[2](P.get(m))));
+    const norm = raw.map(r => r.map((v,j) => {
+      const col = raw.map(x => x[j]), lo = Math.min(...col), hi = Math.max(...col);
+      return hi === lo ? 50 : (v - lo)/(hi - lo)*100;
+    }));
+    s.appendChild(card("Profile matrix", "Colour = rank within the column · printed value = the real number",
+      chartHeat(members.slice(0,12), cols.map(c=>c[1]), norm.slice(0,12),
+        { padL:170, cellH:40, rotate:true,
+          cellText: (v,i,j) => cols[j][3](raw[i][j]),
+          fmt: v => "rank score " + nf(v) })));
+    main.appendChild(s);
+  }
+
+  /* ---------- nav ---------- */
+  const nav = $("#m-nav"); nav.innerHTML = "";
+  SECTIONS.forEach((sec, i) => {
+    const a = el("a"); a.href = "#" + sec.id;
+    const n = el("i", null, String(i+1).padStart(2,"0"));
+    a.appendChild(n);
+    a.appendChild(document.createTextNode(sec.nav));
+    nav.appendChild(a);
+  });
+  const links = [...nav.querySelectorAll("a")];
+  const map = new Map(links.map(a => [a.getAttribute("href").slice(1), a]));
+  const io = new IntersectionObserver(es => {
+    es.forEach(e => {
+      if (e.isIntersecting){
+        links.forEach(a => a.classList.remove("on"));
+        const a = map.get(e.target.id);
+        if (a){ a.classList.add("on"); a.scrollIntoView({ block:"nearest", inline:"nearest" }); }
+      }
+    });
+  }, { rootMargin: "-50px 0px -75% 0px" });
+  main.querySelectorAll("section.sec").forEach(sec => io.observe(sec));
+}
+
+/* vertical 100% stacked area (months × members) */
+function chartStack100Vertical(rows, keys, ticks){
+  const W = 1000, H = 340, padL = 56, padR = 14, padT = 14, padB = 34;
+  const svg = svgRoot(W, H), plotW = W-padL-padR, plotH = H-padT-padB;
+  const n = rows.length;
+  const X = i => padL + (n === 1 ? plotW/2 : i/(n-1)*plotW);
+  const cum = rows.map(r => {
+    const total = sum(keys.map(k => r.vals[k.key] || 0)) || 1;
+    let acc = 0;
+    return keys.map(k => { acc += (r.vals[k.key] || 0)/total*100; return acc; });
+  });
+  keys.forEach((k, ki) => {
+    let d = "";
+    for (let i = 0; i < n; i++) d += (i ? "L" : "M") + X(i).toFixed(1) + "," +
+      (padT + plotH - cum[i][ki]/100*plotH).toFixed(1);
+    for (let i = n-1; i >= 0; i--){
+      const below = ki === 0 ? 0 : cum[i][ki-1];
+      d += "L" + X(i).toFixed(1) + "," + (padT + plotH - below/100*plotH).toFixed(1);
+    }
+    svg.appendChild(S("path", { d: d + "Z", style: "fill:" + k.color }));
+  });
+  [0,25,50,75,100].forEach(t => {
+    const y = padT + plotH - t/100*plotH;
+    svg.appendChild(TX(padL-10, y+4, t + "%", "axm", { "text-anchor":"end" }));
+  });
+  const bw = plotW/Math.max(1,n);
+  rows.forEach((r, i) => {
+    const total = sum(keys.map(k => r.vals[k.key] || 0)) || 1;
+    const html = "<b>" + esc(r.label) + "</b><br>" + keys.filter(k => r.vals[k.key])
+      .map(k => esc(k.label) + ": " + pct((r.vals[k.key]||0)/total*100)).join("<br>");
+    const rect = S("rect", { x: X(i)-bw/2, y: padT, width: Math.max(1.5,bw), height: plotH, fill:"transparent" });
+    bindTip(rect, html);
+    svg.appendChild(rect);
+  });
+  (ticks || []).forEach(t => svg.appendChild(TX(X(t.i), H-12, t.label, "ax", { "text-anchor":"middle" })));
+  return svg;
+}
+
+/* ==========================================================================
+   8 · app wiring
+   ========================================================================== */
+let RAW = null, NAME = "", CURRENT = null;
+
+function showError(msg){
+  const e = $("#err"); e.textContent = msg; e.classList.add("show");
+  $("#busy").classList.remove("show");
+}
+function busy(on, text){
+  $("#busytext").textContent = text || "Analysing…";
+  $("#busy").classList.toggle("show", !!on);
+  if (on) $("#err").classList.remove("show");
+}
+
+function run(text, name, order){
+  RAW = text; NAME = name || "chat.txt";
+  busy(true, "Reading " + NAME + "…");
+  setTimeout(() => {
+    try {
+      const parsed = parseChat(RAW, order || $("#t-order").value || "auto");
+      CURRENT = analyse(parsed);
+      buildReport(CURRENT);
+      $("#intro").style.display = "none";
+      $("#report").classList.add("show");
+      busy(false);
+      window.scrollTo(0, 0);
+    } catch (err){
+      console.error(err);
+      showError(err.message || "Something went wrong reading that file.");
+    }
+  }, 40);
+}
+
+$("#file").addEventListener("change", async e => {
+  const f = e.target.files[0]; if (!f) return;
+  busy(true, "Reading file…");
+  try { const r = await readFile(f); run(r.text, f.name); }
+  catch (err){ showError(err.message); }
+});
+["dragenter","dragover"].forEach(ev => $("#drop").addEventListener(ev, e => {
+  e.preventDefault(); $("#drop").classList.add("over");
+}));
+["dragleave","drop"].forEach(ev => $("#drop").addEventListener(ev, e => {
+  e.preventDefault(); $("#drop").classList.remove("over");
+}));
+$("#drop").addEventListener("drop", async e => {
+  const f = e.dataTransfer.files[0]; if (!f) return;
+  busy(true, "Reading file…");
+  try { const r = await readFile(f); run(r.text, f.name); }
+  catch (err){ showError(err.message); }
+});
+$("#t-order").addEventListener("change", () => { if (RAW) run(RAW, NAME, $("#t-order").value); });
+$("#t-new").addEventListener("click", () => {
+  $("#report").classList.remove("show");
+  $("#intro").style.display = "";
+  $("#file").value = "";
+  window.scrollTo(0, 0);
+});
+$("#t-theme").addEventListener("click", () => {
+  const root = document.documentElement;
+  const dark = getComputedStyle(root).getPropertyValue("--paper").trim() === "#1a1a19";
+  root.setAttribute("data-theme", dark ? "light" : "dark");
+});
+
+/* ---- demo data so the page is explorable without a real export ---- */
+$("#demo").addEventListener("click", () => run(makeDemo(), "demo-chat.txt", "dmy"));
+
+function makeDemo(){
+  const people = ["Ana Ferreira", "Bilal Khan", "Chen Wei", "Diego Ramos", "Eve Novak"];
+  const weight = [0.34, 0.27, 0.19, 0.13, 0.07];
+  const bits = ["haha yes", "on my way", "did you see this?", "😂😂", "call me when free",
+    "I'll be late sorry", "who's coming tonight", "sounds good 👍", "not again 🙄", "let's do saturday",
+    "https://www.instagram.com/reel/AbC123/", "image omitted", "audio omitted", "sticker omitted",
+    "any news?", "🎉🎉 congrats!!", "meeting moved to 4", "lol what", "https://news.example.com/story",
+    "ok", "thanks a lot 🙏", "WHAT", "im in", "same here", "😭 that's terrible", "video omitted"];
+  const out = ["23/11/2023, 9:14:02 pm - Ana Ferreira created group \"Weekend Crew\""];
+  const start = new Date(2023, 10, 24).getTime();
+  const days = 620;
+  let rnd = 42;
+  const R = () => (rnd = (rnd * 1103515245 + 12345) % 2147483648) / 2147483648;
+  for (let d = 0; d < days; d++){
+    if (R() < 0.18) continue;
+    const n = Math.floor(R() * 26) + 1;
+    for (let i = 0; i < n; i++){
+      const t = new Date(start + d*86400000 + (7 + R()*16)*3600000 + R()*3600000);
+      let r = R(), who = people[0], acc = 0;
+      for (let k = 0; k < people.length; k++){ acc += weight[k]; if (r <= acc){ who = people[k]; break; } }
+      const body = bits[Math.floor(R()*bits.length)];
+      const dd = String(t.getDate()).padStart(2,"0"), mo = String(t.getMonth()+1).padStart(2,"0");
+      let hh = t.getHours(); const ap = hh >= 12 ? "pm" : "am"; hh = hh % 12 || 12;
+      out.push(dd + "/" + mo + "/" + t.getFullYear() + ", " + hh + ":" +
+        String(t.getMinutes()).padStart(2,"0") + " " + ap + " - " + who + ": " + body);
+    }
+  }
+  return out.join("\n");
+}
+
+/* expose for testing */
+window.WA = { run, parseChat, analyse };
+})();
+</script>
+</body>
+</html>

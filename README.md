@@ -4,6 +4,8 @@ Drop in a WhatsApp chat export and get the whole story back: who talks, how much
 how fast they reply, and what they talk about — about fifty charts and tables, built in
 your browser from a single HTML file.
 
+### 🔗 **[Try it Live Here](https://ouseph444.github.io/whatsapp_chat_analysis/)**
+
 No install, no build step, no server, no dependencies. **Your chat never leaves your device.**
 
 ![The upload screen](docs/screenshot-upload.png)

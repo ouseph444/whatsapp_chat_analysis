@@ -12,7 +12,7 @@ No install, no build step, no server, no dependencies. **Your chat never leaves 
 
 ## Quick start
 
-1. Download [`whatsapp_analyzer.html`](whatsapp_analyzer.html) (that one file is the whole app).
+1. Download [`index.html`](index.html) (that one file is the whole app).
 2. Open it in any modern browser — double-click is enough.
 3. Drag your exported chat onto the page, or press **Choose file**.
 
